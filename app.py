@@ -68,7 +68,6 @@ st.markdown("""
 # Authentication functions
 def authenticate_residue(row):
     """
-    Authenticate residue based on elemental criteria from Sibudu manuscript.
     """
     # Convert to float, handle non-numeric values
     def safe_float(value):
@@ -288,11 +287,8 @@ with st.sidebar:
     st.markdown("""
     ### About TaphoSpec
     
-    Platform for authenticating archaeological residues using multi-modal spectroscopy.
-    
-    **Based on:**  
-    Hafting Adhesive Preservation in Guano-Rich Rockshelters (Sibudu Cave study)
-    
+    Platform for authenticating archaeological residues using multi-modal spectroscopy.   
+   
     **Methods:**
     - SEM-EDS elemental analysis
     - Correlation-based diagenesis detection
@@ -915,4 +911,4 @@ elif page == "Report":
             st.info("PDF export functionality will be available in future version. Use CSV/Excel export from Authentication page.")
 
 st.markdown("---")
-st.caption("TaphoSpec v1.0 Phase 1 | TraceoLab, University of Liège | Based on Sibudu Cave hafting adhesives manuscript")
+st.caption("TaphoSpec v1.0 Phase 1 | TraceoLab, University of Liège | 
