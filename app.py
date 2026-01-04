@@ -911,4 +911,4 @@ elif page == "Report":
             st.info("PDF export functionality will be available in future version. Use CSV/Excel export from Authentication page.")
 
 st.markdown("---")
-st.caption("TaphoSpec v1.0 Phase 1 | TraceoLab, University of Liège | 
+st.caption("TaphoSpec v1.0 Phase 1 | TraceoLab, University of Liège")
