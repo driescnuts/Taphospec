@@ -101,7 +101,7 @@ C,P,Ca,Mn,Fe,K,Al,Si
 
 ### Sample Data
 
-A sample dataset based on Sibudu Cave analyses is provided in `/sample_data/sample_sibudu_data.csv` for testing.
+A test sample dataset is provided in `/sample_data/sample_sibudu_data.csv` for testing.
 
 ## 📊 Usage Workflow
 
@@ -205,14 +205,13 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## 🙏 Acknowledgments
 
 - University of Liège, TraceoLab
-- Sibudu Cave research team
-- Archaeological science community
+
 
 ## 📧 Contact
 
 For questions or collaboration inquiries:
 - Email: dries.cnuts@uliege.be
-- Lab: [TraceoLab](https://www.traceotrust.org/)
+- Lab: [TraceoLab](https://www.traceolab.be/)
 
 ---
 
