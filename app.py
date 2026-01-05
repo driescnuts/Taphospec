@@ -6,6 +6,8 @@ import plotly.express as px
 from scipy.stats import pearsonr
 from io import BytesIO
 
+from database import get_db_connection, init_session_state_db
+
 # Page configuration
 st.set_page_config(
     page_title="TaphoSpec - Archaeological Residue Analysis",
@@ -64,6 +66,19 @@ st.markdown("""
     }
 </style>
 """, unsafe_allow_html=True)
+
+# ==============================================
+# DATABASE CONNECTION
+# ==============================================
+try:
+    db = get_db_connection()
+    init_session_state_db()
+    database_enabled = True
+    st.success("✅ Database connected", icon="🗄️")
+except Exception as e:
+    database_enabled = False
+    # Optioneel: toon warning alleen in sidebar
+    # st.sidebar.warning("⚠️ Database not configured")
 
 # Authentication functions
 def authenticate_residue(row):
@@ -300,6 +315,12 @@ if 'data' not in st.session_state:
     st.session_state.data = None
 if 'authenticated_data' not in st.session_state:
     st.session_state.authenticated_data = None
+
+if database_enabled:
+    if 'current_project_id' not in st.session_state:
+        st.session_state.current_project_id = None
+    if 'current_site_id' not in st.session_state:
+        st.session_state.current_site_id = None
 
 # Page: Data Import
 if page == "Data Import":
