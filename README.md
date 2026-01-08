@@ -1,218 +1,304 @@
-# TaphoSpec
+# TaphoSpec v2.0 - Nieuwe Structuur
 
-**Multi-Modal Spectroscopic Analysis Platform for Archaeological Residue Authentication**
+## 🎯 Overzicht Verbeteringen
 
-[![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://your-app-url.streamlit.app)
+### **1. Gebruiksvriendelijke Navigatie**
 
-TaphoSpec is a comprehensive analytical platform for authenticating archaeological residues using multi-modal spectroscopy, with specific focus on distinguishing preserved organic adhesives from authigenic mineral mimics in cave and rockshelter contexts.
+De app is nu georganiseerd volgens de natuurlijke onderzoeksworkflow:
 
-## 🎯 Overview
+```
+🏠 Home Dashboard
+   └─ Quick stats, recent projects, quick actions
 
-Archaeological residues on stone tools can provide critical evidence for past human behavior, but diagenetic processes—particularly in phosphate-rich environments—can create mineral deposits that closely mimic organic residues. TaphoSpec provides systematic protocols for:
+📊 Data Management
+   ├─ 📥 Import Data (met database integratie)
+   ├─ 📝 View & Edit Data
+   └─ 📍 Projects & Sites (met GPS coordinates)
 
-- **Elemental correlation analysis** to identify diagenetic processes
-- **Automated authentication** based on diagnostic elemental criteria
-- **Multi-criteria decision support** integrating chemical, optical, and morphological evidence
-- **Taphonomic context interpretation** for robust scientific conclusions
+🔬 Analysis
+   ├─ ✓ Residue Authentication (Karkanas & Weiner)
+   ├─ 📊 Spectral Analysis (FTIR/Raman matching)
+   ├─ 📈 Statistical Analysis (PCA, HCA, correlations)
+   └─ 🧮 Specialized Tools (Ca/P calculator, etc.)
 
-## 🔬 Scientific Background
+📈 Results & Visualization
+   ├─ 🗺️ Site Maps (geografische visualisatie)
+   └─ 📊 Statistics Dashboard
 
-Based on research at Sibudu Cave (South Africa) documenting hafting adhesive preservation in guano-rich rockshelters. The platform implements methodologies from:
+⚙️ Settings & Help
+```
 
-- Weiner et al. (2002) - Diagenetic mineral detection through elemental correlations
-- Karkanas et al. (2000, 2002) - K-Al phosphate formation under acidic conditions  
-- Shahack-Gross et al. (2004) - Organic carbon replacement patterns
-- Mentzer et al. (2014) - Authigenic mineral assemblages in rockshelters
+### **2. Database Integratie - Opgeloste Problemen**
 
-## ✨ Features
+#### ✅ **Visuele Attributen Geïntegreerd in Samples Tabel**
 
-### Phase 1 (Current Release)
+**Probleem opgelost:** Visuele observaties (kleur, textuur, transparantie, etc.) zijn nu direct geïntegreerd in de `samples` tabel in plaats van in een aparte tabel.
 
-#### 1. **Correlation Analysis Module**
-Diagnostic elemental correlations for identifying diagenetic pathways:
-- **P-Ca correlation**: Calcium phosphate mineralisation (guano diagenesis)
-- **K-Al correlation**: K-Al phosphate formation (acidic conditions, pH <5)
-- **C-P anticorrelation**: Organic carbon replacement by phosphates
-- **C-Mn anticorrelation**: Organic carbon replacement by Mn-bearing phases
+**Nieuwe samples tabel structuur:**
+```sql
+CREATE TABLE samples (
+    sample_id UUID PRIMARY KEY,
+    site_id UUID REFERENCES sites,
+    sample_code TEXT NOT NULL,
+    
+    -- Archaeological context
+    tool_type TEXT,
+    raw_material TEXT,
+    location_on_tool TEXT,
+    preservation_status TEXT,
+    
+    -- INTEGRATED visual attributes (Karkanas & Weiner)
+    visual_color TEXT,
+    visual_texture TEXT,
+    visual_transparency TEXT,
+    visual_luster TEXT,
+    visual_morphology TEXT,
+    visual_description TEXT,
+    
+    sample_notes TEXT,
+    ...
+);
+```
 
-#### 2. **Automated Authentication Workflow**
-Classification based on diagnostic cut-off values:
+**Voordelen:**
+- Eén record per sample met alle metadata
+- Geen complexe joins nodig
+- Eenvoudigere data import
+- Directe koppeling met sample_id
 
-**Organic Adhesives:**
-- C > 25%, Mn < 1%, P < 3%
-- C > 20%, Fe > 5%, Mn < 1%, P < 5% (ochre-loaded)
+#### ✅ **Import Data Volledig Afgestemd**
 
-**Mineral Mimics:**
-- Mn > 5% → Mn-phosphate (DIAGNOSTIC)
-- P > 10%, Ca/P = 1.5-1.8, C < 10% → Apatite
-- K > 2%, Al > 2%, P > 5% → K-Al phosphates
+De Import Data module is volledig aangepast aan de nieuwe database structuur:
 
-#### 3. **Ca/P Ratio Calculator**
-Automatic calculation and interpretation:
-- Brushite: ~1.0
-- Hydroxyapatite/Dahllite: 1.6-1.7
-- Biogenic phosphate identification
+1. **Project & Site Selection** - Stap 1 voor organisatie
+2. **File Upload** - Excel/CSV met European decimal notation (komma's)
+3. **Column Mapping** - Automatische detectie + manuele aanpassing
+4. **Preview & Import** - Met validatie en progress tracking
 
-#### 4. **Confidence Scoring System**
-High/Medium/Low confidence with detailed reasoning and recommendations for each analysis point.
+**Ondersteunde kolommen:**
+- Sample metadata (code, tool type, raw material, location)
+- Visuele attributen (kleur, textuur, transparantie, luster, morfologie)
+- Elemental data (C, N, O, P, Ca, K, Al, Mn, Fe, Si, Mg, Na, S, Cl, Ti, Zn)
+- Acquisition parameters (voltage, beam current, analyst, date)
 
-#### 5. **Visual Attributes Documentation**
-Structured recording of:
-- Optical microscopy observations (color, texture, location, boundaries)
-- SEM morphology (500-2000× magnification)
-- Multi-criteria authentication framework
+### **3. Karkanas & Weiner Methodologie**
 
-## 🚀 Getting Started
+De Residue Authentication module implementeert de volledige Karkanas & Weiner aanpak:
 
-### Installation
+**Diagnostic Criteria:**
+```python
+Organic Adhesive:
+- C > 25%
+- Mn < 1%
+- P < 3%
+
+Mineral Mimic:
+- Mn > 5% (diagnostic)
+
+Biogenic Phosphate:
+- 1.5 < Ca/P < 2.0
+- Ca > 20%, P > 10%
+```
+
+**Output:**
+- Classification (Organic Adhesive, Mineral Mimic, etc.)
+- Confidence level (High, Medium, Low)
+- Reasoning (array of diagnostic criteria met)
+- Recommendations (follow-up analyses)
+
+### **4. Verbeterde User Experience**
+
+- **TraceoLab branding** met ULiège kleuren (#16a34a)
+- **Context awareness** - Current project/site shown in sidebar
+- **Progress tracking** - Voor lange operaties (import, authentication)
+- **Validation** - Data quality checks voor import
+- **Error handling** - Duidelijke foutmeldingen
+- **European formats** - Comma decimals, date formats
+
+## 🗄️ Database Setup
+
+### **Nieuwe Schema (v2.0)**
+
+1. **Drop oude schema** (als je die had):
+```sql
+DROP TABLE IF EXISTS interpretations CASCADE;
+DROP TABLE IF EXISTS ftir_analyses CASCADE;
+DROP TABLE IF EXISTS eds_analyses CASCADE;
+DROP TABLE IF EXISTS samples CASCADE;
+DROP TABLE IF EXISTS sites CASCADE;
+DROP TABLE IF EXISTS projects CASCADE;
+```
+
+2. **Run nieuwe schema:**
+```bash
+# In Supabase SQL Editor:
+# Plak de volledige inhoud van database_schema_v2.sql
+```
+
+3. **Verify:**
+```sql
+-- Check samples table structure
+SELECT column_name, data_type 
+FROM information_schema.columns 
+WHERE table_name = 'samples' 
+ORDER BY ordinal_position;
+```
+
+Je zou moeten zien:
+- sample_id
+- site_id
+- sample_code
+- tool_type
+- raw_material
+- location_on_tool
+- preservation_status
+- **visual_color** ← NIEUW
+- **visual_texture** ← NIEUW
+- **visual_transparency** ← NIEUW
+- **visual_luster** ← NIEUW
+- **visual_morphology** ← NIEUW
+- **visual_description** ← NIEUW
+- sample_notes
+- created_at
+- updated_at
+
+## 📦 Deployment
+
+### **Lokaal testen:**
 
 ```bash
-# Clone the repository
-git clone https://github.com/yourusername/taphospec.git
-cd taphospec
-
 # Install dependencies
 pip install -r requirements.txt
 
-# Run the application
+# Set environment variables
+export SUPABASE_URL="your-url"
+export SUPABASE_KEY="your-key"
+
+# Run app
 streamlit run app.py
 ```
 
-### Data Format
+### **Streamlit Cloud:**
 
-Upload SEM-EDS data as CSV or Excel with the following structure:
-
-**Required columns:**
-- `C` - Carbon (mass %)
-- `P` - Phosphorus (mass %)
-- `Ca` - Calcium (mass %)
-- `Mn` - Manganese (mass %)
-
-**Optional columns:**
-- `N`, `O`, `K`, `Al`, `Fe`, `Si`, `Mg`, `Na`, `S`, `Cl`, `Ti`, `Zn`
-
-**Example:**
-```csv
-C,P,Ca,Mn,Fe,K,Al,Si
-45.6,0.8,2.1,0.1,0.4,0.3,0.2,0.2
-38.2,2.9,4.2,0.2,0.8,0.4,0.3,0.1
-6.8,9.1,7.2,24.3,3.1,1.2,0.8,4.1
+1. Push naar GitHub
+2. Connect to Streamlit Cloud
+3. Add secrets in dashboard:
+```toml
+SUPABASE_URL = "your-url"
+SUPABASE_KEY = "your-key"
 ```
 
-### Sample Data
+## 🎨 Customization
 
-A test sample dataset is provided in `/sample_data/sample_sibudu_data.csv` for testing.
+### **Kleuren aanpassen:**
 
-## 📊 Usage Workflow
-
-1. **Data Import**: Upload your SEM-EDS elemental composition data
-2. **Correlation Analysis**: Examine diagenetic signatures
-3. **Authentication**: View automated classifications with confidence scores
-4. **Visual Attributes**: Document optical and SEM morphological observations
-5. **Report**: Generate comprehensive taphonomic analysis summary
-
-## 🛠️ Technical Stack
-
-- **Frontend**: Streamlit
-- **Data Processing**: Pandas, NumPy
-- **Statistics**: SciPy
-- **Visualization**: Plotly
-- **Export**: OpenPyXL
-
-## 📖 Documentation
-
-### Authentication Decision Tree
-
-```
-IF Mn > 5%
-  → Mn-Phosphate Mineral Mimic (High Confidence)
-  → EXCLUDE from organic residue analysis
-
-ELIF P > 10% AND Ca/P = 1.5-1.8 AND C < 10%
-  → Apatite/Hydroxyapatite (High Confidence)
-  → EXCLUDE from organic residue analysis
-
-ELIF K > 2% AND Al > 2% AND P > 5%
-  → K-Al Phosphate (High Confidence)
-  → Acidic diagenesis indicator
-  → EXCLUDE from organic residue analysis
-
-ELIF C > 25% AND Mn < 1% AND P < 3%
-  → Organic Adhesive (High Confidence)
-  → PROCEED to FTIR/GC-MS
-
-ELIF C > 20% AND Fe > 5% AND Mn < 1% AND P < 5%
-  → Ochre-Loaded Compound Adhesive (High Confidence)
-  → PROCEED to FTIR/GC-MS
-
-ELIF 15 ≤ C ≤ 25 AND 1 ≤ Mn ≤ 5 AND 3 ≤ P ≤ 8
-  → Partially Mineralized Organic (Medium Confidence)
-  → CAUTION: Detailed SEM morphology assessment needed
-
-ELSE
-  → Ambiguous (Low Confidence)
-  → Additional analyses required
+In `app.py`, wijzig de CSS variabelen:
+```css
+:root {
+    --primary-color: #16a34a;  /* TraceoLab green */
+    --secondary-color: #059669;
+}
 ```
 
-### Correlation Interpretation
+### **Diagnostic thresholds:**
 
-| Correlation | Threshold | Sign | Interpretation |
-|------------|-----------|------|----------------|
-| P-Ca | \|r\| > 0.7 | + | Calcium phosphate mineralisation (guano) |
-| K-Al | \|r\| > 0.6 | + | K-Al phosphate formation (pH <5) |
-| K-P | \|r\| > 0.6 | + | K incorporation into phosphates |
-| C-P | r < -0.3 | - | Phosphate replaces organic carbon |
-| C-Mn | r < -0.2 | - | Mn oxides/phosphates replace carbon |
-
-## 🗺️ Roadmap
-
-### Phase 2 (Planned)
-- Spatial aggregation by excavation unit/stratigraphic layer
-- Raw material substrate effects tracking
-- Preservation landscape mapping
-- Batch processing capabilities
-
-### Phase 3 (Future)
-- FTIR spectral library integration
-- Machine learning for SEM morphology classification
-- Experimental taphonomy trajectory visualization
-- Multi-site comparison tools
-
-## 📚 Citation
-
-If you use TaphoSpec in your research, please cite:
-
-```
-TaphoSpec: Multi-Modal Spectroscopic Analysis Platform for Archaeological Residue Authentication
-Cnuts, D. et al. (2024)
-TraceoLab, University of Liège
-https://github.com/yourusername/taphospec
+In `pages/residue_authentication.py`:
+```python
+c_threshold = 25  # Carbon minimum for organics
+mn_max = 1        # Manganese maximum for organics
+mn_mimic = 5      # Manganese diagnostic for mimics
 ```
 
-## 🤝 Contributing
+## 🔬 Workflow Voorbeeld
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+### **Complete analyse workflow:**
 
-## 📄 License
+1. **Create Project** (Data Management → Projects & Sites)
+   - Project naam: "Guano Cave Study 2024"
+   - PI: "Dries Cnuts"
+   - Institution: "TraceoLab, ULiège"
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+2. **Register Site** (Data Management → Projects & Sites)
+   - Site naam: "Blombos Cave"
+   - Country: "South Africa"
+   - GPS: -34.4167, 21.2167
+   - Context: "guano-rich"
 
-## 👥 Authors
+3. **Import Data** (Data Management → Import Data)
+   - Upload Excel met EDS spectra
+   - Map columns (auto-detect + manual)
+   - Preview & validate
+   - Import to database
 
-- **Dries Cnuts** - TraceoLab, University of Liège
-- Developed in collaboration with Claude (Anthropic)
+4. **Authenticate** (Analysis → Residue Authentication)
+   - Select data source (Current Site)
+   - Adjust thresholds if needed
+   - Run authentication
+   - Review results
+   - Save classifications
 
-## 🙏 Acknowledgments
+5. **Visualize** (Results → Site Maps)
+   - View all sites on map
+   - Color by preservation rate
+   - Size by number of analyses
+   - Click for details
 
-- University of Liège, TraceoLab
+6. **Export** (anywhere)
+   - Download results as Excel
+   - Generate PDF reports
+   - Share with collaborators
 
+## 📚 Belangrijke Bestanden
+
+```
+taphospec/
+├── app.py                          # Main application
+├── database.py                     # Database operations
+├── database_schema_v2.sql          # Updated schema
+├── requirements.txt                # Dependencies
+├── pages/
+│   ├── __init__.py
+│   ├── home.py                     # Home dashboard
+│   ├── import_data.py              # ✨ NIEUW - Fully integrated
+│   ├── residue_authentication.py   # ✨ NIEUW - K&W methodology
+│   ├── project_management.py
+│   ├── site_maps.py
+│   ├── statistics_dashboard.py
+│   └── ...
+└── README.md                       # This file
+```
+
+## ⚠️ Breaking Changes
+
+Als je data had in de oude structuur:
+
+1. **Backup oude data**
+2. **Drop oude schema**
+3. **Install nieuwe schema** (database_schema_v2.sql)
+4. **Re-import data** met nieuwe Import Data module
+
+De visuele attributen die voorheen in een aparte tabel zaten worden nu automatisch geïntegreerd tijdens import.
+
+## 🆘 Troubleshooting
+
+### "Database not connected"
+→ Check Streamlit secrets of environment variables
+
+### "Column 'visual_color' does not exist"
+→ Update database schema met database_schema_v2.sql
+
+### "Import fails with validation errors"
+→ Check decimal notation (gebruik komma's voor Europese data)
+
+### "Site map shows no sites"
+→ Ensure sites have latitude/longitude coordinates
 
 ## 📧 Contact
 
-For questions or collaboration inquiries:
-- Email: dries.cnuts@uliege.be
-- Lab: [TraceoLab](https://www.traceolab.be/)
+**Dries Cnuts**
+TraceoLab, University of Liège
+dries.cnuts@uliege.be
 
 ---
 
-**TraceoLab · University of Liège · v1.0 Phase 1**
+**TaphoSpec v2.0** - Archaeological Residue Authentication Platform

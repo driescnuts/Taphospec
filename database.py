@@ -1,45 +1,48 @@
 """
-TaphoSpec Database Module
-Supabase/PostgreSQL integration for archaeological residue data
+Database module for TaphoSpec
+Handles all Supabase PostgreSQL interactions
 """
 
 import os
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Any
 from datetime import datetime
-import pandas as pd
-from supabase import create_client, Client
 import streamlit as st
 
+try:
+    from supabase import create_client, Client
+    SUPABASE_AVAILABLE = True
+except ImportError:
+    SUPABASE_AVAILABLE = False
+
+
 class TaphoSpecDB:
-    """
-    Database interface for TaphoSpec application.
-    Handles all CRUD operations with Supabase backend.
-    """
+    """Database connection and operations for TaphoSpec"""
     
     def __init__(self):
-        """Initialize Supabase client"""
-        # Get credentials from Streamlit secrets or environment
+        """Initialize database connection"""
+        if not SUPABASE_AVAILABLE:
+            raise ImportError("Supabase not available. Install with: pip install supabase")
+        
+        # Get credentials from Streamlit secrets or environment variables
         try:
-            supabase_url = st.secrets["SUPABASE_URL"]
-            supabase_key = st.secrets["SUPABASE_KEY"]
+            url = st.secrets.get("SUPABASE_URL") or os.getenv("SUPABASE_URL")
+            key = st.secrets.get("SUPABASE_KEY") or os.getenv("SUPABASE_KEY")
         except:
-            supabase_url = os.getenv("SUPABASE_URL")
-            supabase_key = os.getenv("SUPABASE_KEY")
+            url = os.getenv("SUPABASE_URL")
+            key = os.getenv("SUPABASE_KEY")
         
-        if not supabase_url or not supabase_key:
-            raise ValueError("Supabase credentials not found. Please configure in .streamlit/secrets.toml")
+        if not url or not key:
+            raise ValueError(
+                "Supabase credentials not found. Please set SUPABASE_URL and SUPABASE_KEY "
+                "in Streamlit secrets or environment variables."
+            )
         
-        self.client: Client = create_client(supabase_url, supabase_key)
+        self.client: Client = create_client(url, key)
     
-    # ==========================================
-    # PROJECT OPERATIONS
-    # ==========================================
+    # ==================== PROJECT OPERATIONS ====================
     
-    def create_project(self, 
-                      project_name: str,
-                      description: str = None,
-                      principal_investigator: str = None,
-                      institution: str = None,
+    def create_project(self, project_name: str, description: str = None, 
+                      principal_investigator: str = None, institution: str = None,
                       is_public: bool = False) -> Dict:
         """Create a new project"""
         data = {
@@ -50,328 +53,255 @@ class TaphoSpecDB:
             "is_public": is_public
         }
         
-        response = self.client.table("projects").insert(data).execute()
-        return response.data[0] if response.data else None
+        result = self.client.table("projects").insert(data).execute()
+        return result.data[0] if result.data else None
     
-    def get_projects(self, user_only: bool = False) -> pd.DataFrame:
-        """Get all accessible projects"""
-        response = self.client.table("projects").select("*").execute()
-        return pd.DataFrame(response.data) if response.data else pd.DataFrame()
+    def get_projects(self, is_public: Optional[bool] = None) -> List[Dict]:
+        """Get all projects, optionally filtered by public status"""
+        query = self.client.table("projects").select("*")
+        
+        if is_public is not None:
+            query = query.eq("is_public", is_public)
+        
+        result = query.order("created_at", desc=True).execute()
+        return result.data if result.data else []
     
-    def get_project(self, project_id: str) -> Dict:
-        """Get single project by ID"""
-        response = self.client.table("projects").select("*").eq("project_id", project_id).execute()
-        return response.data[0] if response.data else None
+    def get_project(self, project_id: str) -> Optional[Dict]:
+        """Get a specific project by ID"""
+        result = self.client.table("projects").select("*").eq("project_id", project_id).execute()
+        return result.data[0] if result.data else None
     
     def update_project(self, project_id: str, updates: Dict) -> Dict:
-        """Update project information"""
-        response = self.client.table("projects").update(updates).eq("project_id", project_id).execute()
-        return response.data[0] if response.data else None
+        """Update a project"""
+        updates["updated_at"] = datetime.utcnow().isoformat()
+        result = self.client.table("projects").update(updates).eq("project_id", project_id).execute()
+        return result.data[0] if result.data else None
     
     def delete_project(self, project_id: str) -> bool:
-        """Delete project (cascade deletes sites, samples, analyses)"""
-        response = self.client.table("projects").delete().eq("project_id", project_id).execute()
-        return len(response.data) > 0
+        """Delete a project (cascade deletes all related data)"""
+        result = self.client.table("projects").delete().eq("project_id", project_id).execute()
+        return len(result.data) > 0
     
-    # ==========================================
-    # SITE OPERATIONS
-    # ==========================================
+    # ==================== SITE OPERATIONS ====================
     
-    def create_site(self,
-                   project_id: str,
-                   site_name: str,
-                   latitude: float,
-                   longitude: float,
-                   country: str = None,
-                   context_type: str = None,
-                   **kwargs) -> Dict:
-        """Create a new site"""
+    def create_site(self, project_id: str, site_name: str, country: str = None,
+                   latitude: float = None, longitude: float = None, 
+                   site_type: str = None, excavation_year: int = None,
+                   context_type: str = None, stratigraphy: str = None,
+                   site_description: str = None) -> Dict:
+        """Create a new archaeological site"""
         data = {
             "project_id": project_id,
             "site_name": site_name,
+            "country": country,
             "latitude": latitude,
             "longitude": longitude,
-            "country": country,
+            "site_type": site_type,
+            "excavation_year": excavation_year,
             "context_type": context_type,
-            **kwargs
+            "stratigraphy": stratigraphy,
+            "site_description": site_description
         }
         
-        response = self.client.table("sites").insert(data).execute()
-        return response.data[0] if response.data else None
+        result = self.client.table("sites").insert(data).execute()
+        return result.data[0] if result.data else None
     
-    def get_sites(self, project_id: str = None) -> pd.DataFrame:
-        """Get sites, optionally filtered by project"""
+    def get_sites(self, project_id: str = None) -> List[Dict]:
+        """Get all sites, optionally filtered by project"""
         query = self.client.table("sites").select("*")
         
         if project_id:
             query = query.eq("project_id", project_id)
         
-        response = query.execute()
-        return pd.DataFrame(response.data) if response.data else pd.DataFrame()
+        result = query.order("site_name").execute()
+        return result.data if result.data else []
     
-    def get_site(self, site_id: str) -> Dict:
-        """Get single site by ID"""
-        response = self.client.table("sites").select("*").eq("site_id", site_id).execute()
-        return response.data[0] if response.data else None
-    
-    def get_site_statistics(self) -> pd.DataFrame:
-        """Get pre-computed site statistics from view"""
-        response = self.client.table("site_statistics").select("*").execute()
-        return pd.DataFrame(response.data) if response.data else pd.DataFrame()
+    def get_site(self, site_id: str) -> Optional[Dict]:
+        """Get a specific site by ID"""
+        result = self.client.table("sites").select("*").eq("site_id", site_id).execute()
+        return result.data[0] if result.data else None
     
     def update_site(self, site_id: str, updates: Dict) -> Dict:
-        """Update site information"""
-        response = self.client.table("sites").update(updates).eq("site_id", site_id).execute()
-        return response.data[0] if response.data else None
+        """Update a site"""
+        updates["updated_at"] = datetime.utcnow().isoformat()
+        result = self.client.table("sites").update(updates).eq("site_id", site_id).execute()
+        return result.data[0] if result.data else None
     
-    # ==========================================
-    # SAMPLE OPERATIONS
-    # ==========================================
+    def delete_site(self, site_id: str) -> bool:
+        """Delete a site (cascade deletes all related data)"""
+        result = self.client.table("sites").delete().eq("site_id", site_id).execute()
+        return len(result.data) > 0
     
-    def create_sample(self,
-                     site_id: str,
-                     sample_code: str,
-                     artifact_type: str = None,
-                     raw_material: str = None,
-                     **kwargs) -> Dict:
-        """Create a new sample"""
+    # ==================== SAMPLE OPERATIONS ====================
+    
+    def create_sample(self, site_id: str, sample_code: str, 
+                     tool_type: str = None, raw_material: str = None,
+                     location_on_tool: str = None, preservation_status: str = None,
+                     # Visual attributes integrated in same table
+                     visual_color: str = None, visual_texture: str = None,
+                     visual_transparency: str = None, visual_luster: str = None,
+                     visual_morphology: str = None, visual_description: str = None,
+                     sample_notes: str = None) -> Dict:
+        """Create a new sample with visual attributes integrated"""
         data = {
             "site_id": site_id,
             "sample_code": sample_code,
-            "artifact_type": artifact_type,
+            "tool_type": tool_type,
             "raw_material": raw_material,
-            **kwargs
+            "location_on_tool": location_on_tool,
+            "preservation_status": preservation_status,
+            # Visual attributes
+            "visual_color": visual_color,
+            "visual_texture": visual_texture,
+            "visual_transparency": visual_transparency,
+            "visual_luster": visual_luster,
+            "visual_morphology": visual_morphology,
+            "visual_description": visual_description,
+            "sample_notes": sample_notes
         }
         
-        response = self.client.table("samples").insert(data).execute()
-        return response.data[0] if response.data else None
+        result = self.client.table("samples").insert(data).execute()
+        return result.data[0] if result.data else None
     
-    def get_samples(self, site_id: str = None) -> pd.DataFrame:
-        """Get samples, optionally filtered by site"""
-        query = self.client.table("samples").select("*")
+    def get_samples(self, site_id: str = None, project_id: str = None) -> List[Dict]:
+        """Get all samples, optionally filtered by site or project"""
+        if project_id:
+            # Get samples through site-project relationship
+            query = self.client.table("samples").select(
+                "*, sites!inner(site_id, site_name, project_id)"
+            ).eq("sites.project_id", project_id)
+        elif site_id:
+            query = self.client.table("samples").select("*").eq("site_id", site_id)
+        else:
+            query = self.client.table("samples").select("*")
+        
+        result = query.order("sample_code").execute()
+        return result.data if result.data else []
+    
+    def get_sample(self, sample_id: str) -> Optional[Dict]:
+        """Get a specific sample by ID with all visual attributes"""
+        result = self.client.table("samples").select("*").eq("sample_id", sample_id).execute()
+        return result.data[0] if result.data else None
+    
+    def update_sample(self, sample_id: str, updates: Dict) -> Dict:
+        """Update a sample"""
+        updates["updated_at"] = datetime.utcnow().isoformat()
+        result = self.client.table("samples").update(updates).eq("sample_id", sample_id).execute()
+        return result.data[0] if result.data else None
+    
+    def delete_sample(self, sample_id: str) -> bool:
+        """Delete a sample (cascade deletes all related analyses)"""
+        result = self.client.table("samples").delete().eq("sample_id", sample_id).execute()
+        return len(result.data) > 0
+    
+    # ==================== EDS ANALYSIS OPERATIONS ====================
+    
+    def create_eds_analysis(self, sample_id: str, elemental_data: Dict,
+                           analysis_metadata: Dict = None) -> Dict:
+        """
+        Create a new EDS analysis
+        
+        elemental_data: Dict with elements as lowercase keys (c, p, ca, etc.)
+        analysis_metadata: Optional dict with acquisition parameters
+        """
+        data = {
+            "sample_id": sample_id,
+            # Elemental composition (lowercase column names in database)
+            "c": elemental_data.get("C") or elemental_data.get("c"),
+            "n": elemental_data.get("N") or elemental_data.get("n"),
+            "o": elemental_data.get("O") or elemental_data.get("o"),
+            "p": elemental_data.get("P") or elemental_data.get("p"),
+            "ca": elemental_data.get("Ca") or elemental_data.get("ca"),
+            "k": elemental_data.get("K") or elemental_data.get("k"),
+            "al": elemental_data.get("Al") or elemental_data.get("al"),
+            "mn": elemental_data.get("Mn") or elemental_data.get("mn"),
+            "fe": elemental_data.get("Fe") or elemental_data.get("fe"),
+            "si": elemental_data.get("Si") or elemental_data.get("si"),
+            "mg": elemental_data.get("Mg") or elemental_data.get("mg"),
+            "na": elemental_data.get("Na") or elemental_data.get("na"),
+            "s": elemental_data.get("S") or elemental_data.get("s"),
+            "cl": elemental_data.get("Cl") or elemental_data.get("cl"),
+            "ti": elemental_data.get("Ti") or elemental_data.get("ti"),
+            "zn": elemental_data.get("Zn") or elemental_data.get("zn"),
+        }
+        
+        # Add metadata if provided
+        if analysis_metadata:
+            data.update({
+                "analysis_date": analysis_metadata.get("analysis_date"),
+                "analyst": analysis_metadata.get("analyst"),
+                "instrument": analysis_metadata.get("instrument"),
+                "accelerating_voltage_kv": analysis_metadata.get("accelerating_voltage_kv"),
+                "beam_current_na": analysis_metadata.get("beam_current_na"),
+                "analysis_point_number": analysis_metadata.get("analysis_point_number"),
+                "analysis_notes": analysis_metadata.get("analysis_notes")
+            })
+        
+        # Calculate Ca/P ratio if both present
+        if data.get("ca") and data.get("p"):
+            data["ca_p_ratio"] = data["ca"] / data["p"]
+        
+        result = self.client.table("eds_analyses").insert(data).execute()
+        return result.data[0] if result.data else None
+    
+    def get_eds_analyses(self, sample_id: str = None, site_id: str = None) -> List[Dict]:
+        """Get EDS analyses, optionally filtered by sample or site"""
+        if site_id:
+            query = self.client.table("eds_analyses").select(
+                "*, samples!inner(sample_id, sample_code, site_id)"
+            ).eq("samples.site_id", site_id)
+        elif sample_id:
+            query = self.client.table("eds_analyses").select("*").eq("sample_id", sample_id)
+        else:
+            query = self.client.table("eds_analyses").select("*")
+        
+        result = query.order("created_at", desc=True).execute()
+        return result.data if result.data else []
+    
+    def update_eds_analysis(self, analysis_id: str, updates: Dict) -> Dict:
+        """Update an EDS analysis (e.g., add classification results)"""
+        updates["updated_at"] = datetime.utcnow().isoformat()
+        result = self.client.table("eds_analyses").update(updates).eq("analysis_id", analysis_id).execute()
+        return result.data[0] if result.data else None
+    
+    # ==================== STATISTICS & AGGREGATIONS ====================
+    
+    def get_site_statistics(self, site_id: str = None) -> List[Dict]:
+        """Get pre-computed site statistics"""
+        query = self.client.table("site_statistics").select("*")
         
         if site_id:
             query = query.eq("site_id", site_id)
         
-        response = query.execute()
-        return pd.DataFrame(response.data) if response.data else pd.DataFrame()
+        result = query.execute()
+        return result.data if result.data else []
     
-    def get_sample(self, sample_id: str) -> Dict:
-        """Get single sample by ID"""
-        response = self.client.table("samples").select("*").eq("sample_id", sample_id).execute()
-        return response.data[0] if response.data else None
+    def get_project_summary(self, project_id: str = None) -> List[Dict]:
+        """Get pre-computed project summaries"""
+        query = self.client.table("project_summary").select("*")
+        
+        if project_id:
+            query = query.eq("project_id", project_id)
+        
+        result = query.execute()
+        return result.data if result.data else []
     
-    def update_sample(self, sample_id: str, updates: Dict) -> Dict:
-        """Update sample information"""
-        response = self.client.table("samples").update(updates).eq("sample_id", sample_id).execute()
-        return response.data[0] if response.data else None
+    # ==================== BULK OPERATIONS ====================
     
-    # ==========================================
-    # EDS ANALYSIS OPERATIONS
-    # ==========================================
+    def bulk_create_samples(self, samples_data: List[Dict]) -> List[Dict]:
+        """Create multiple samples at once"""
+        result = self.client.table("samples").insert(samples_data).execute()
+        return result.data if result.data else []
     
-    def create_eds_analysis(self,
-                           sample_id: str,
-                           elemental_data: Dict,
-                           authentication: Dict,
-                           **kwargs) -> Dict:
-        """Create a new EDS analysis"""
-        data = {
-            "sample_id": sample_id,
-            **elemental_data,  # C, P, Ca, Mn, Fe, etc.
-            "classification": authentication.get('classification'),
-            "confidence": authentication.get('confidence'),
-            "reasoning": authentication.get('reasoning'),
-            "recommendation": authentication.get('recommendation'),
-            "ca_p_ratio": authentication.get('ca_p_ratio'),
-            **kwargs
-        }
-        
-        response = self.client.table("eds_analyses").insert(data).execute()
-        return response.data[0] if response.data else None
-    
-    def bulk_create_eds_analyses(self, analyses: List[Dict]) -> List[Dict]:
-        """Bulk insert multiple EDS analyses"""
-        response = self.client.table("eds_analyses").insert(analyses).execute()
-        return response.data if response.data else []
-    
-    def get_eds_analyses(self, sample_id: str = None, site_id: str = None) -> pd.DataFrame:
-        """Get EDS analyses, optionally filtered"""
-        query = self.client.table("eds_analyses").select("*, samples(site_id, sample_code)")
-        
-        if sample_id:
-            query = query.eq("sample_id", sample_id)
-        
-        response = query.execute()
-        df = pd.DataFrame(response.data) if response.data else pd.DataFrame()
-        
-        # Filter by site if needed (after join)
-        if site_id and not df.empty:
-            df = df[df['samples'].apply(lambda x: x['site_id'] == site_id if x else False)]
-        
-        return df
-    
-    def update_eds_analysis(self, analysis_id: str, updates: Dict) -> Dict:
-        """Update EDS analysis"""
-        response = self.client.table("eds_analyses").update(updates).eq("analysis_id", analysis_id).execute()
-        return response.data[0] if response.data else None
-    
-    # ==========================================
-    # BATCH IMPORT FROM CSV/EXCEL
-    # ==========================================
-    
-    def import_eds_data_from_dataframe(self, 
-                                       df: pd.DataFrame, 
-                                       site_id: str,
-                                       sample_prefix: str = "AUTO") -> Tuple[int, int]:
-        """
-        Import EDS data from DataFrame (from CSV upload).
-        Creates samples automatically if needed.
-        
-        Returns: (n_samples_created, n_analyses_created)
-        """
-        n_samples = 0
-        n_analyses = 0
-        
-        for idx, row in df.iterrows():
-            # Create sample
-            sample_code = f"{sample_prefix}_{idx+1:03d}"
-            
-            sample = self.create_sample(
-                site_id=site_id,
-                sample_code=sample_code,
-                sample_notes=f"Auto-imported from batch upload"
-            )
-            
-            if sample:
-                n_samples += 1
-                sample_id = sample['sample_id']
-                
-                # Extract elemental data
-                elemental_cols = ['C', 'N', 'O', 'P', 'Ca', 'K', 'Al', 'Mn', 'Fe', 'Si', 
-                                'Mg', 'Na', 'S', 'Cl', 'Ti', 'Zn']
-                elemental_data = {}
-                
-                for col in elemental_cols:
-                    if col in row and pd.notna(row[col]):
-                        elemental_data[col] = float(row[col])
-                
-                # Authentication would happen here (imported from app.py)
-                # For now, store raw data
-                
-                analysis = self.create_eds_analysis(
-                    sample_id=sample_id,
-                    elemental_data=elemental_data,
-                    authentication={},  # To be filled by authentication function
-                    analysis_notes="Auto-imported from batch upload"
-                )
-                
-                if analysis:
-                    n_analyses += 1
-        
-        return n_samples, n_analyses
-    
-    # ==========================================
-    # EXPORT FUNCTIONS
-    # ==========================================
-    
-    def export_project_to_csv(self, project_id: str) -> pd.DataFrame:
-        """Export all project data to DataFrame for CSV export"""
-        # Get all data with joins
-        query = """
-        SELECT 
-            p.project_name,
-            s.site_name,
-            s.latitude,
-            s.longitude,
-            s.context_type,
-            sam.sample_code,
-            sam.artifact_type,
-            sam.raw_material,
-            eds.*
-        FROM projects p
-        JOIN sites s ON p.project_id = s.project_id
-        JOIN samples sam ON s.site_id = sam.site_id
-        JOIN eds_analyses eds ON sam.sample_id = eds.sample_id
-        WHERE p.project_id = %s
-        """
-        
-        # Supabase doesn't support raw SQL easily, so we'll do it with multiple queries
-        sites = self.get_sites(project_id)
-        
-        all_data = []
-        for _, site in sites.iterrows():
-            samples = self.get_samples(site['site_id'])
-            
-            for _, sample in samples.iterrows():
-                analyses = self.get_eds_analyses(sample['sample_id'])
-                
-                for _, analysis in analyses.iterrows():
-                    row = {
-                        **site.to_dict(),
-                        **sample.to_dict(),
-                        **analysis.to_dict()
-                    }
-                    all_data.append(row)
-        
-        return pd.DataFrame(all_data)
-    
-    # ==========================================
-    # SEARCH & FILTER
-    # ==========================================
-    
-    def search_samples(self, 
-                      search_term: str = None,
-                      context_type: str = None,
-                      raw_material: str = None,
-                      classification: str = None) -> pd.DataFrame:
-        """
-        Search samples with various filters
-        """
-        # Complex query with joins - would need to be built step by step
-        query = self.client.table("samples").select("""
-            *,
-            sites(*),
-            eds_analyses(*)
-        """)
-        
-        # Add filters as needed
-        response = query.execute()
-        
-        df = pd.DataFrame(response.data) if response.data else pd.DataFrame()
-        
-        # Apply additional filters in pandas
-        if context_type and not df.empty:
-            df = df[df['sites'].apply(lambda x: x.get('context_type') == context_type if x else False)]
-        
-        if raw_material and not df.empty:
-            df = df[df['raw_material'] == raw_material]
-        
-        return df
+    def bulk_create_eds_analyses(self, analyses_data: List[Dict]) -> List[Dict]:
+        """Create multiple EDS analyses at once"""
+        result = self.client.table("eds_analyses").insert(analyses_data).execute()
+        return result.data if result.data else []
 
 
-# ==========================================
-# HELPER FUNCTIONS FOR STREAMLIT
-# ==========================================
-
-@st.cache_resource
-def get_db_connection():
-    """
-    Cached database connection for Streamlit.
-    Use this in your app.py:
-    
-    db = get_db_connection()
-    """
-    return TaphoSpecDB()
-
-
-def init_session_state_db():
-    """Initialize database-related session state"""
-    if 'current_project_id' not in st.session_state:
-        st.session_state.current_project_id = None
-    
-    if 'current_site_id' not in st.session_state:
-        st.session_state.current_site_id = None
-    
-    if 'current_sample_id' not in st.session_state:
-        st.session_state.current_sample_id = None
+# Convenience function for getting database connection
+def get_db_connection() -> TaphoSpecDB:
+    """Get or create database connection from session state"""
+    if 'db' not in st.session_state or st.session_state.db is None:
+        st.session_state.db = TaphoSpecDB()
+    return st.session_state.db

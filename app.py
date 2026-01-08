@@ -6,7 +6,26 @@ import plotly.express as px
 from scipy.stats import pearsonr
 from io import BytesIO
 
-from database import get_db_connection, init_session_state_db
+# Database integration
+try:
+    from database import get_db_connection, init_session_state_db
+    DATABASE_AVAILABLE = True
+except ImportError:
+    DATABASE_AVAILABLE = False
+
+# Authentication integration
+try:
+    from auth import (
+        AuthManager, 
+        check_authentication, 
+        render_user_menu,
+        init_auth_session_state,
+        is_admin,
+        render_admin_panel
+    )
+    AUTH_AVAILABLE = True
+except ImportError:
+    AUTH_AVAILABLE = False
 
 # Page configuration
 st.set_page_config(
@@ -68,21 +87,46 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ==============================================
-# DATABASE CONNECTION
+# AUTHENTICATION & DATABASE CONNECTION
 # ==============================================
-try:
-    db = get_db_connection()
-    init_session_state_db()
-    database_enabled = True
-    st.success("✅ Database connected", icon="🗄️")
-except Exception as e:
-    database_enabled = False
-    # Optioneel: toon warning alleen in sidebar
-    # st.sidebar.warning("⚠️ Database not configured")
+
+# Initialize authentication
+if AUTH_AVAILABLE:
+    init_auth_session_state()
+    
+    # Check authentication first
+    if not check_authentication():
+        st.stop()  # Stop execution if not authenticated
+    
+    # Initialize auth manager for logged-in users
+    if DATABASE_AVAILABLE:
+        try:
+            db = get_db_connection()
+            st.session_state.auth_manager = AuthManager(db.client)
+            init_session_state_db()
+            database_enabled = True
+        except Exception as e:
+            database_enabled = False
+            st.sidebar.warning("⚠️ Database not configured. Running in standalone mode.")
+    else:
+        database_enabled = False
+else:
+    # No authentication - original behavior
+    if DATABASE_AVAILABLE:
+        try:
+            db = get_db_connection()
+            init_session_state_db()
+            database_enabled = True
+        except Exception as e:
+            database_enabled = False
+            st.sidebar.warning("⚠️ Database not configured. Running in standalone mode.")
+    else:
+        database_enabled = False
 
 # Authentication functions
 def authenticate_residue(row):
     """
+    Authenticate residue based on diagnostic elemental criteria.
     """
     # Convert to float, handle non-numeric values
     def safe_float(value):
@@ -293,21 +337,40 @@ with st.sidebar:
     
     page = st.radio(
         "Select Analysis",
-        ["Data Import", "Correlation Analysis", "Authentication", "Visual Attributes", "Report"],
+        ["Data Import", "Correlation Analysis", "Authentication", "Visual Attributes", "Report"] + 
+        (["Project Management", "Site Map", "Statistics"] if database_enabled else []) +
+        (["Admin Panel"] if AUTH_AVAILABLE and is_admin() else []),
         label_visibility="collapsed"
     )
+    
+    st.markdown("---")
+    
+    # User menu (if authentication is enabled)
+    if AUTH_AVAILABLE:
+        render_user_menu()
+    
+    # Database status indicator
+    if database_enabled:
+        st.success("🗄️ Database: Connected")
+        if st.session_state.current_project_id:
+            st.info(f"📁 Active Project")
+        if st.session_state.current_site_id:
+            st.info(f"📍 Active Site")
+    else:
+        st.warning("🗄️ Standalone Mode")
     
     st.markdown("---")
     
     st.markdown("""
     ### About TaphoSpec
     
-    Platform for authenticating archaeological residues using multi-modal spectroscopy.   
-   
+    Platform for authenticating archaeological residues using multi-modal spectroscopy.
+    
     **Methods:**
     - SEM-EDS elemental analysis
     - Correlation-based diagenesis detection
     - Multi-criteria authentication
+    - Guano-driven taphonomy assessment
     """)
 
 # Initialize session state
@@ -316,11 +379,14 @@ if 'data' not in st.session_state:
 if 'authenticated_data' not in st.session_state:
     st.session_state.authenticated_data = None
 
+# Database-related session state
 if database_enabled:
     if 'current_project_id' not in st.session_state:
         st.session_state.current_project_id = None
     if 'current_site_id' not in st.session_state:
         st.session_state.current_site_id = None
+    if 'current_sample_id' not in st.session_state:
+        st.session_state.current_sample_id = None
 
 # Page: Data Import
 if page == "Data Import":
@@ -931,5 +997,316 @@ elif page == "Report":
         if st.button("📥 Download PDF Report", type="primary"):
             st.info("PDF export functionality will be available in future version. Use CSV/Excel export from Authentication page.")
 
+# ==============================================
+# NEW DATABASE-ENABLED PAGES
+# ==============================================
+
+# Page: Project Management
+elif page == "Project Management" and database_enabled:
+    st.header("📁 Project Management")
+    
+    tab1, tab2, tab3 = st.tabs(["Projects", "Sites", "Data Import"])
+    
+    with tab1:
+        st.subheader("Your Projects")
+        
+        # Create new project
+        with st.expander("➕ Create New Project"):
+            with st.form("new_project"):
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    proj_name = st.text_input("Project Name*", placeholder="e.g., Krapina Analysis 2024")
+                    pi_name = st.text_input("Principal Investigator", placeholder="Your name")
+                
+                with col2:
+                    institution = st.text_input("Institution", placeholder="University of Liège")
+                    is_public = st.checkbox("Make public (visible to all users)", value=False)
+                
+                description = st.text_area("Description", placeholder="Brief project description...")
+                
+                submitted = st.form_submit_button("Create Project")
+                
+                if submitted and proj_name:
+                    try:
+                        project = db.create_project(
+                            project_name=proj_name,
+                            description=description,
+                            principal_investigator=pi_name,
+                            institution=institution,
+                            is_public=is_public
+                        )
+                        st.success(f"✅ Created project: {proj_name}")
+                        st.session_state.current_project_id = project['project_id']
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Error creating project: {str(e)}")
+        
+        # List existing projects
+        try:
+            projects_df = db.get_projects()
+            
+            if len(projects_df) > 0:
+                for _, project in projects_df.iterrows():
+                    with st.container():
+                        col1, col2, col3 = st.columns([3, 2, 1])
+                        
+                        with col1:
+                            st.markdown(f"### {project['project_name']}")
+                            if project.get('description'):
+                                st.caption(project['description'])
+                        
+                        with col2:
+                            if project.get('principal_investigator'):
+                                st.write(f"👤 {project['principal_investigator']}")
+                            if project.get('institution'):
+                                st.caption(project['institution'])
+                        
+                        with col3:
+                            if st.button("Select", key=f"proj_{project['project_id']}"):
+                                st.session_state.current_project_id = project['project_id']
+                                st.rerun()
+                        
+                        st.markdown("---")
+            else:
+                st.info("No projects yet. Create your first project above!")
+                
+        except Exception as e:
+            st.error(f"Error loading projects: {str(e)}")
+    
+    with tab2:
+        st.subheader("Sites")
+        
+        if not st.session_state.current_project_id:
+            st.warning("⚠️ Please select a project first (Projects tab)")
+        else:
+            # Create new site
+            with st.expander("➕ Register New Site"):
+                with st.form("new_site"):
+                    col1, col2 = st.columns(2)
+                    
+                    with col1:
+                        site_name = st.text_input("Site Name*", placeholder="e.g., Krapina Cave")
+                        country = st.text_input("Country", placeholder="e.g., Croatia")
+                        latitude = st.number_input("Latitude*", min_value=-90.0, max_value=90.0, value=0.0, format="%.6f")
+                        longitude = st.number_input("Longitude*", min_value=-180.0, max_value=180.0, value=0.0, format="%.6f")
+                    
+                    with col2:
+                        context_type = st.selectbox(
+                            "Taphonomic Context",
+                            ["cave_guano", "cave_carbonate", "rockshelter", "open_air_sand", 
+                             "open_air_clay", "peat_bog", "volcanic_ash", "other"]
+                        )
+                        sediment_type = st.text_input("Sediment Type", placeholder="e.g., guano-rich")
+                        time_period = st.text_input("Time Period", placeholder="e.g., Middle Palaeolithic")
+                        excavation_year = st.number_input("Excavation Year", min_value=1800, max_value=2026, value=2024)
+                    
+                    site_notes = st.text_area("Notes", placeholder="Additional site information...")
+                    
+                    submitted = st.form_submit_button("Register Site")
+                    
+                    if submitted and site_name and latitude != 0.0 and longitude != 0.0:
+                        try:
+                            site = db.create_site(
+                                project_id=st.session_state.current_project_id,
+                                site_name=site_name,
+                                latitude=latitude,
+                                longitude=longitude,
+                                country=country,
+                                context_type=context_type,
+                                sediment_type=sediment_type,
+                                time_period=time_period,
+                                excavation_year=excavation_year,
+                                site_notes=site_notes
+                            )
+                            st.success(f"✅ Registered site: {site_name}")
+                            st.session_state.current_site_id = site['site_id']
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Error creating site: {str(e)}")
+            
+            # List sites
+            try:
+                sites_df = db.get_sites(st.session_state.current_project_id)
+                
+                if len(sites_df) > 0:
+                    for _, site in sites_df.iterrows():
+                        with st.container():
+                            col1, col2, col3 = st.columns([3, 2, 1])
+                            
+                            with col1:
+                                st.markdown(f"### 📍 {site['site_name']}")
+                                if site.get('country'):
+                                    st.caption(f"{site['country']}")
+                            
+                            with col2:
+                                st.write(f"🗺️ {site['latitude']:.4f}, {site['longitude']:.4f}")
+                                if site.get('context_type'):
+                                    st.caption(f"Context: {site['context_type']}")
+                            
+                            with col3:
+                                if st.button("Select", key=f"site_{site['site_id']}"):
+                                    st.session_state.current_site_id = site['site_id']
+                                    st.rerun()
+                            
+                            st.markdown("---")
+                else:
+                    st.info("No sites registered yet. Add your first site above!")
+                    
+            except Exception as e:
+                st.error(f"Error loading sites: {str(e)}")
+    
+    with tab3:
+        st.subheader("💾 Save Current Data to Database")
+        
+        if not st.session_state.current_site_id:
+            st.warning("⚠️ Please select a site first (Sites tab)")
+        elif st.session_state.data is None:
+            st.warning("⚠️ No data loaded. Please import data first (Data Import page)")
+        else:
+            st.info(f"Ready to save {len(st.session_state.data)} analyses to database")
+            
+            sample_prefix = st.text_input("Sample Prefix", value="AUTO", help="Prefix for auto-generated sample codes")
+            
+            if st.button("💾 Save to Database", type="primary"):
+                try:
+                    with st.spinner("Saving to database..."):
+                        n_samples, n_analyses = db.import_eds_data_from_dataframe(
+                            df=st.session_state.data,
+                            site_id=st.session_state.current_site_id,
+                            sample_prefix=sample_prefix
+                        )
+                    
+                    st.success(f"✅ Saved {n_samples} samples with {n_analyses} analyses!")
+                    
+                except Exception as e:
+                    st.error(f"Error saving to database: {str(e)}")
+
+# Page: Site Map
+elif page == "Site Map" and database_enabled:
+    st.header("🗺️ Geographic Distribution")
+    
+    try:
+        # Get site statistics
+        map_data = db.get_site_statistics()
+        
+        if len(map_data) == 0:
+            st.info("📍 No sites registered yet. Go to Project Management → Sites to add your first site!")
+        else:
+            # Create map
+            fig = px.scatter_mapbox(
+                map_data,
+                lat='latitude',
+                lon='longitude',
+                hover_name='site_name',
+                hover_data={
+                    'n_analyses': True,
+                    'n_organic': True,
+                    'preservation_rate': ':.1f',
+                    'context_type': True,
+                    'latitude': False,
+                    'longitude': False
+                },
+                color='preservation_rate',
+                color_continuous_scale='RdYlGn',
+                size='n_analyses',
+                size_max=20,
+                zoom=2,
+                height=600,
+                labels={
+                    'preservation_rate': 'Preservation %',
+                    'n_analyses': '# Analyses',
+                    'n_organic': '# Organic',
+                    'context_type': 'Context'
+                }
+            )
+            
+            fig.update_layout(
+                mapbox_style="open-street-map",
+                margin={"r":0,"t":0,"l":0,"b":0}
+            )
+            
+            st.plotly_chart(fig, use_container_width=True)
+            
+            # Statistics
+            st.markdown("### 📊 Summary Statistics")
+            col1, col2, col3, col4 = st.columns(4)
+            
+            with col1:
+                st.metric("Total Sites", len(map_data))
+            with col2:
+                st.metric("Total Analyses", int(map_data['n_analyses'].sum()))
+            with col3:
+                st.metric("Organic Residues", int(map_data['n_organic'].sum()))
+            with col4:
+                avg_pres = map_data['preservation_rate'].mean()
+                st.metric("Avg Preservation", f"{avg_pres:.1f}%")
+            
+            # Context breakdown
+            st.markdown("### 🏛️ By Taphonomic Context")
+            context_summary = map_data.groupby('context_type').agg({
+                'site_name': 'count',
+                'n_analyses': 'sum',
+                'preservation_rate': 'mean'
+            }).round(1)
+            context_summary.columns = ['Sites', 'Analyses', 'Avg Preservation %']
+            st.dataframe(context_summary, use_container_width=True)
+            
+    except Exception as e:
+        st.error(f"Error loading map data: {str(e)}")
+        st.info("Make sure you have sites registered with coordinates in Project Management.")
+
+# Page: Statistics
+elif page == "Statistics" and database_enabled:
+    st.header("📈 Database Statistics")
+    
+    try:
+        # Project summary
+        st.subheader("📁 Projects Overview")
+        projects = db.get_projects()
+        
+        if len(projects) > 0:
+            for _, proj in projects.iterrows():
+                with st.expander(f"📂 {proj['project_name']}"):
+                    col1, col2 = st.columns(2)
+                    
+                    with col1:
+                        if proj.get('principal_investigator'):
+                            st.write(f"**PI:** {proj['principal_investigator']}")
+                        if proj.get('institution'):
+                            st.write(f"**Institution:** {proj['institution']}")
+                    
+                    with col2:
+                        st.write(f"**Created:** {proj['created_at'][:10]}")
+                        st.write(f"**Public:** {'Yes' if proj.get('is_public') else 'No'}")
+                    
+                    # Get project sites
+                    sites = db.get_sites(proj['project_id'])
+                    st.write(f"**Sites:** {len(sites)}")
+        else:
+            st.info("No projects yet")
+        
+        # Overall statistics
+        st.markdown("---")
+        st.subheader("📊 Overall Statistics")
+        
+        sites_df = db.get_sites()
+        
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("Total Projects", len(projects))
+        with col2:
+            st.metric("Total Sites", len(sites_df))
+        with col3:
+            # Would need to count samples/analyses
+            st.metric("Data Points", "-")
+        
+    except Exception as e:
+        st.error(f"Error loading statistics: {str(e)}")
+
+# Page: Admin Panel
+elif page == "Admin Panel" and AUTH_AVAILABLE and is_admin():
+    render_admin_panel(st.session_state.auth_manager)
+
 st.markdown("---")
-st.caption("TaphoSpec v1.0 Phase 1 | TraceoLab, University of Liège")
+st.caption("TaphoSpec v2.0 with Authentication | TraceoLab, University of Liège")

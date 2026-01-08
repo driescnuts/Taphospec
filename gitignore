@@ -1,0 +1,55 @@
+# Streamlit
+.streamlit/secrets.toml
+.streamlit/config.toml
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+.venv
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Data files (don't commit user data)
+*.csv
+*.xlsx
+*.xls
+data/
+uploads/
+
+# Backups
+*.backup
+*.bak
+*_backup.py
+
+# Logs
+*.log
+logs/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Distribution
+dist/
+build/
+*.egg-info/
+
+# Environment
+.env
+.env.local
