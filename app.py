@@ -94,22 +94,28 @@ st.markdown("""
 if AUTH_AVAILABLE:
     init_auth_session_state()
     
-    # Check authentication first
-    if not check_authentication():
-        st.stop()  # Stop execution if not authenticated
-    
-    # Initialize auth manager for logged-in users
+    # Initialize database connection FIRST (needed for auth_manager)
     if DATABASE_AVAILABLE:
         try:
             db = get_db_connection()
-            st.session_state.auth_manager = AuthManager(db.client)
+            # Initialize auth manager BEFORE authentication check
+            if 'auth_manager' not in st.session_state:
+                st.session_state.auth_manager = AuthManager(db.client)
             init_session_state_db()
             database_enabled = True
         except Exception as e:
             database_enabled = False
-            st.sidebar.warning("⚠️ Database not configured. Running in standalone mode.")
+            st.error(f"⚠️ Database connection failed: {str(e)}")
+            st.info("Please check your Supabase credentials in Streamlit secrets.")
+            st.stop()
     else:
-        database_enabled = False
+        st.error("⚠️ Database module not available. Please install dependencies.")
+        st.stop()
+    
+    # NOW check authentication (auth_manager is initialized)
+    if not check_authentication():
+        st.stop()  # Stop execution if not authenticated
+        
 else:
     # No authentication - original behavior
     if DATABASE_AVAILABLE:
