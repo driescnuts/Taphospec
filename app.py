@@ -793,15 +793,27 @@ elif page == "Visual Attributes":
         col1, col2 = st.columns([1, 2])
         
         with col1:
+            # Get elemental data safely
+            c_val = point_data.get('C', None)
+            mn_val = point_data.get('Mn', None)
+            p_val = point_data.get('P', None)
+            ca_p = point_auth.get('ca_p_ratio', None)
+            
+            # Format values safely
+            c_str = f"{c_val:.1f}%" if c_val is not None and isinstance(c_val, (int, float)) else 'N/A'
+            mn_str = f"{mn_val:.2f}%" if mn_val is not None and isinstance(mn_val, (int, float)) else 'N/A'
+            p_str = f"{p_val:.1f}%" if p_val is not None and isinstance(p_val, (int, float)) else 'N/A'
+            ca_p_str = f"{ca_p:.2f}" if ca_p is not None and isinstance(ca_p, (int, float)) else 'N/A'
+            
             st.markdown(f"""
             **Classification:** {point_auth['classification']}  
             **Confidence:** {point_auth['confidence']}
             
             **Elemental Data:**
-            - C: {point_data.get('C', 'N/A'):.1f}%
-            - Mn: {point_data.get('Mn', 'N/A'):.2f}%
-            - P: {point_data.get('P', 'N/A'):.1f}%
-            - Ca/P: {point_auth['ca_p_ratio']:.2f if point_auth['ca_p_ratio'] else 'N/A'}
+            - C: {c_str}
+            - Mn: {mn_str}
+            - P: {p_str}
+            - Ca/P: {ca_p_str}
             """)
         
         with col2:

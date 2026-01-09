@@ -43,7 +43,7 @@ class TaphoSpecDB:
     
     def create_project(self, project_name: str, description: str = None, 
                       principal_investigator: str = None, institution: str = None,
-                      is_public: bool = False) -> Dict:
+                      is_public: bool = False, user_id: str = None) -> Dict:
         """Create a new project"""
         data = {
             "project_name": project_name,
@@ -52,6 +52,10 @@ class TaphoSpecDB:
             "institution": institution,
             "is_public": is_public
         }
+        
+        # Add user_id if provided (required for RLS)
+        if user_id:
+            data["user_id"] = user_id
         
         result = self.client.table("projects").insert(data).execute()
         return result.data[0] if result.data else None
@@ -88,7 +92,7 @@ class TaphoSpecDB:
                    latitude: float = None, longitude: float = None, 
                    site_type: str = None, excavation_year: int = None,
                    context_type: str = None, stratigraphy: str = None,
-                   site_description: str = None) -> Dict:
+                   sediment_type: str = None, site_description: str = None) -> Dict:
         """Create a new archaeological site"""
         data = {
             "project_id": project_id,
@@ -100,6 +104,7 @@ class TaphoSpecDB:
             "excavation_year": excavation_year,
             "context_type": context_type,
             "stratigraphy": stratigraphy,
+            "sediment_type": sediment_type,
             "site_description": site_description
         }
         
