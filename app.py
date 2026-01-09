@@ -1272,7 +1272,10 @@ elif page == "Statistics" and database_enabled:
         projects = db.get_projects()
         
         if len(projects) > 0:
-            for _, proj in projects.iterrows():
+            # Convert list to DataFrame for easier iteration
+            projects_df = pd.DataFrame(projects)
+            
+            for _, proj in projects_df.iterrows():
                 with st.expander(f"📂 {proj['project_name']}"):
                     col1, col2 = st.columns(2)
                     
