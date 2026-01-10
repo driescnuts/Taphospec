@@ -27,6 +27,15 @@ try:
 except ImportError:
     AUTH_AVAILABLE = False
 
+# Phase 2: Library features
+try:
+    from page_library_search import render_library_search_page
+    from page_library_management import render_library_management_page
+    LIBRARY_PAGES_AVAILABLE = True
+except ImportError:
+    LIBRARY_PAGES_AVAILABLE = False
+
+
 # Page configuration
 st.set_page_config(
     page_title="TaphoSpec - Archaeological Residue Analysis",
@@ -345,6 +354,7 @@ with st.sidebar:
         "Select Analysis",
         ["Data Import", "Correlation Analysis", "Authentication", "Visual Attributes", "Report"] + 
         (["Project Management", "Site Map", "Statistics"] if database_enabled else []) +
+        (["Library Search", "Library Management"] if database_enabled and LIBRARY_PAGES_AVAILABLE else []) +
         (["Admin Panel"] if AUTH_AVAILABLE and is_admin() else []),
         label_visibility="collapsed"
     )
@@ -1325,9 +1335,40 @@ elif page == "Statistics" and database_enabled:
     except Exception as e:
         st.error(f"Error loading statistics: {str(e)}")
 
+# Page: Library Search
+elif page == "Library Search" and database_enabled and LIBRARY_PAGES_AVAILABLE:
+    render_library_search_page(db)
+
+# Page: Library Management  
+elif page == "Library Management" and database_enabled and LIBRARY_PAGES_AVAILABLE:
+    render_library_management_page(db)
+
 # Page: Admin Panel
 elif page == "Admin Panel" and AUTH_AVAILABLE and is_admin():
     render_admin_panel(st.session_state.auth_manager)
 
 st.markdown("---")
-st.caption("TaphoSpec v2.0 with Authentication | TraceoLab, University of Liège")
+st.caption("TaphoSpec v2.1 with Library Features | TraceoLab, University of Liège")
+
+# ==================== LIBRARY PAGES (v2.1) ====================
+
+def render_library_pages_section(database_enabled, db):
+    """Handle library page routing"""
+    
+    # This function should be called from your main page routing logic
+    # Add this to your page selection:
+    
+    # if selected_page == "📚 Library Search":
+    #     if database_enabled and LIBRARY_PAGES_AVAILABLE:
+    #         render_library_search_page(db)
+    #     else:
+    #         st.warning("Database required for library search")
+    
+    # elif selected_page == "📖 Library Management":
+    #     if database_enabled and LIBRARY_PAGES_AVAILABLE:
+    #         render_library_management_page(db)
+    #     else:
+    #         st.warning("Database required for library management")
+    
+    pass
+
