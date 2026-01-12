@@ -1,359 +1,312 @@
 # ================================================
-# RESIDUE FUNCTIONS - Add to database.py v2.2
+# APP.PY v2.2 - NAVIGATION UPDATE
 # ================================================
-# Insert these functions in the TaphoSpecDB class
+# Replace the navigation section (lines ~350-360) with this:
 
-def create_residue(self, sample_id: str, residue_number: int, 
-                  location_on_tool: str = None, location_description: str = None,
-                  visual_color: str = None, visual_texture: str = None,
-                  visual_transparency: str = None, visual_luster: str = None,
-                  visual_morphology: str = None, visual_distribution: str = None,
-                  visual_preservation: str = None, residue_photo: str = None,
-                  visual_notes: str = None) -> Dict:
-    """Create new residue on a sample"""
-    
-    data = {
-        "sample_id": sample_id,
-        "residue_number": residue_number,
-        "location_on_tool": location_on_tool,
-        "location_description": location_description,
-        "visual_color": visual_color,
-        "visual_texture": visual_texture,
-        "visual_transparency": visual_transparency,
-        "visual_luster": visual_luster,
-        "visual_morphology": visual_morphology,
-        "visual_distribution": visual_distribution,
-        "visual_preservation": visual_preservation,
-        "residue_photo": residue_photo,
-        "visual_notes": visual_notes
-    }
-    
-    # Remove None values
-    data = {k: v for k, v in data.items() if v is not None}
-    
-    result = self.client.table("residues").insert(data).execute()
-    return result.data[0] if result.data else None
-
-
-def get_residues(self, sample_id: str = None, residue_id: str = None) -> List[Dict]:
-    """Get residues, optionally filtered"""
-    
-    query = self.client.table("residues").select("*")
-    
-    if residue_id:
-        query = query.eq("residue_id", residue_id)
-    elif sample_id:
-        query = query.eq("sample_id", sample_id)
-    
-    result = query.order("residue_number", desc=False).execute()
-    return result.data if result.data else []
-
-
-def get_residue_with_analyses(self, residue_id: str) -> Dict:
-    """Get residue with all its EDS analyses"""
-    
-    # Get residue info
-    residue_result = self.client.table("residues").select("*").eq("residue_id", residue_id).execute()
-    
-    if not residue_result.data:
-        return None
-    
-    residue = residue_result.data[0]
-    
-    # Get all EDS analyses for this residue
-    eds_result = self.client.table("eds_analyses").select("*").eq("residue_id", residue_id).order("analysis_point_number").execute()
-    
-    residue['eds_analyses'] = eds_result.data if eds_result.data else []
-    
-    return residue
-
-
-def update_residue(self, residue_id: str, updates: Dict) -> Dict:
-    """Update residue information"""
-    
-    # Add updated_at timestamp
-    updates['updated_at'] = 'now()'
-    
-    result = self.client.table("residues").update(updates).eq("residue_id", residue_id).execute()
-    return result.data[0] if result.data else None
-
-
-def delete_residue(self, residue_id: str) -> bool:
-    """Delete residue (cascades to EDS analyses)"""
-    
-    result = self.client.table("residues").delete().eq("residue_id", residue_id).execute()
-    return True
-
-
-def get_residue_summary(self, sample_id: str = None) -> List[Dict]:
-    """Get residue summary with EDS point counts"""
-    
-    query = self.client.table("residue_summary").select("*")
-    
-    if sample_id:
-        query = query.eq("sample_id", sample_id)
-    
-    result = query.order("sample_code", desc=False).order("residue_number", desc=False).execute()
-    return result.data if result.data else []
-
-
-def get_next_residue_number(self, sample_id: str) -> int:
-    """Get next available residue number for a sample"""
-    
-    result = self.client.table("residues").select("residue_number").eq("sample_id", sample_id).order("residue_number", desc=True).limit(1).execute()
-    
-    if result.data:
-        return result.data[0]['residue_number'] + 1
-    return 1
-
-
-def link_eds_to_residue(self, analysis_id: str, residue_id: str) -> bool:
-    """Link an EDS analysis to a residue"""
-    
-    result = self.client.table("eds_analyses").update({
-        "residue_id": residue_id
-    }).eq("analysis_id", analysis_id).execute()
-    
-    return True
-
-
-def get_eds_by_residue(self, residue_id: str) -> List[Dict]:
-    """Get all EDS analyses for a specific residue"""
-    
-    result = self.client.table("eds_analyses").select("*").eq("residue_id", residue_id).order("analysis_point_number").execute()
-    
-    return result.data if result.data else []
-
-
-def create_residue_with_eds(self, sample_id: str, residue_data: Dict, eds_analyses: List[str]) -> Dict:
-    """Create residue and link multiple EDS analyses to it"""
-    
-    # Create residue
-    residue = self.create_residue(
-        sample_id=sample_id,
-        residue_number=residue_data.get('residue_number'),
-        location_on_tool=residue_data.get('location_on_tool'),
-        location_description=residue_data.get('location_description'),
-        visual_color=residue_data.get('visual_color'),
-        visual_texture=residue_data.get('visual_texture'),
-        visual_transparency=residue_data.get('visual_transparency'),
-        visual_luster=residue_data.get('visual_luster'),
-        visual_morphology=residue_data.get('visual_morphology'),
-        visual_distribution=residue_data.get('visual_distribution'),
-        visual_preservation=residue_data.get('visual_preservation'),
-        residue_photo=residue_data.get('residue_photo'),
-        visual_notes=residue_data.get('visual_notes')
-    )
-    
-    if not residue:
-        return None
-    
-    residue_id = residue['residue_id']
-    
-    # Link EDS analyses
-    for analysis_id in eds_analyses:
-        self.link_eds_to_residue(analysis_id, residue_id)
-    
-    return self.get_residue_with_analyses(residue_id)
-
-
-def get_residues_for_site(self, site_id: str) -> List[Dict]:
-    """Get all residues for a site (across all samples)"""
-    
-    # Get samples for this site
-    samples = self.get_samples(site_id=site_id)
-    sample_ids = [s['sample_id'] for s in samples]
-    
-    if not sample_ids:
-        return []
-    
-    # Get residues for these samples
-    result = self.client.table("residue_summary").select("*").in_("sample_id", sample_ids).execute()
-    
-    return result.data if result.data else []
-
-
+# NEW NAVIGATION STRUCTURE - COLLAPSIBLE SECTIONS
 # ================================================
-# UPDATED: EDS Analysis Functions
-# ================================================
-# These need to be UPDATED in existing database.py
 
-def create_eds_analysis(self, residue_id: str, analysis_point_number: int,
-                       c: float = None, n: float = None, o: float = None,
-                       p: float = None, ca: float = None, k: float = None,
-                       al: float = None, mn: float = None, fe: float = None,
-                       si: float = None, mg: float = None, na: float = None,
-                       s: float = None, cl: float = None, ti: float = None,
-                       zn: float = None, ba: float = None, sr: float = None,
-                       classification: str = None, ca_p_ratio: float = None,
-                       analysis_date: str = None, analyst: str = None) -> Dict:
-    """
-    Create new EDS analysis linked to a residue
-    NOTE: Now takes residue_id instead of sample_id!
-    """
+with st.sidebar:
+    st.header("🔬 TaphoSpec v2.2")
     
-    data = {
-        "residue_id": residue_id,  # Changed from sample_id!
-        "analysis_point_number": analysis_point_number,
-        "c": c, "n": n, "o": o, "p": p, "ca": ca, "k": k,
-        "al": al, "mn": mn, "fe": fe, "si": si, "mg": mg,
-        "na": na, "s": s, "cl": cl, "ti": ti, "zn": zn,
-        "ba": ba, "sr": sr,
-        "classification": classification,
-        "ca_p_ratio": ca_p_ratio,
-        "analysis_date": analysis_date,
-        "analyst": analyst
-    }
+    # Quick Access Buttons
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("🏠 Home", use_container_width=True, key="quick_home"):
+            st.session_state.page = "Home"
+    with col2:
+        if st.button("🔍 Identify", use_container_width=True, key="quick_identify"):
+            st.session_state.page = "Library Search"
     
-    # Calculate Ca/P ratio if both present
-    if ca is not None and p is not None and p > 0:
-        data['ca_p_ratio'] = ca / p
+    st.markdown("---")
     
-    # Remove None values
-    data = {k: v for k, v in data.items() if v is not None}
+    # Initialize page in session state if not exists
+    if 'page' not in st.session_state:
+        st.session_state.page = "Home"
     
-    result = self.client.table("eds_analyses").insert(data).execute()
-    return result.data[0] if result.data else None
-
-
-def get_eds_analyses(self, residue_id: str = None, sample_id: str = None, 
-                    site_id: str = None) -> List[Dict]:
-    """
-    Get EDS analyses, optionally filtered
-    NOTE: Now supports filtering by residue_id!
-    """
+    # ================================================
+    # ARCHAEOLOGICAL DATA Section
+    # ================================================
+    with st.expander("🏛️ ARCHAEOLOGICAL DATA", expanded=True):
+        if st.button("📁 Sites", use_container_width=True, key="nav_sites"):
+            st.session_state.page = "Project Management"
+        if st.button("📥 Import Analyses", use_container_width=True, key="nav_import"):
+            st.session_state.page = "Data Import"
+        if st.button("📊 Dataset Statistics", use_container_width=True, key="nav_stats"):
+            st.session_state.page = "Statistics"
     
-    if residue_id:
-        # Direct query by residue
-        query = self.client.table("eds_analyses").select("*").eq("residue_id", residue_id)
-    elif site_id:
-        # Use view for site filtering
-        query = self.client.table("eds_complete").select("*").eq("site_id", site_id)
-    elif sample_id:
-        # Get via residues
-        residues = self.get_residues(sample_id=sample_id)
-        residue_ids = [r['residue_id'] for r in residues]
-        
-        if not residue_ids:
-            return []
-        
-        query = self.client.table("eds_analyses").select("*").in_("residue_id", residue_ids)
+    # ================================================
+    # IDENTIFICATION Section  
+    # ================================================
+    with st.expander("🔍 IDENTIFICATION", expanded=False):
+        if st.button("🔍 Identify Unknown", use_container_width=True, key="nav_identify"):
+            st.session_state.page = "Library Search"
+    
+    # ================================================
+    # SITE ANALYSIS Section
+    # ================================================
+    with st.expander("📉 SITE ANALYSIS", expanded=False):
+        if st.button("🎯 Bulk Authentication", use_container_width=True, key="nav_auth"):
+            st.session_state.page = "Authentication"
+        if st.button("📊 Correlations", use_container_width=True, key="nav_corr"):
+            st.session_state.page = "Correlation Analysis"
+        if st.button("🗺️ Spatial Patterns", use_container_width=True, key="nav_map"):
+            st.session_state.page = "Site Map"
+        if st.button("📋 Reports", use_container_width=True, key="nav_report"):
+            st.session_state.page = "Report"
+    
+    # ================================================
+    # REFERENCE LIBRARY Section
+    # ================================================
+    if database_enabled and LIBRARY_PAGES_AVAILABLE:
+        with st.expander("📚 REFERENCE LIBRARY", expanded=False):
+            if st.button("📖 Browse References", use_container_width=True, key="nav_browse"):
+                st.session_state.page = "Library Search"
+            if st.button("➕ Manage Entries", use_container_width=True, key="nav_manage"):
+                st.session_state.page = "Library Management"
+    
+    # ================================================
+    # SETTINGS Section (Admin only)
+    # ================================================
+    if AUTH_AVAILABLE and is_admin():
+        st.markdown("---")
+        if st.button("⚙️ Admin Panel", use_container_width=True, key="nav_admin"):
+            st.session_state.page = "Admin Panel"
+    
+    st.markdown("---")
+    
+    # User menu (if authentication is enabled)
+    if AUTH_AVAILABLE:
+        render_user_menu()
+    
+    # Database status indicator
+    if database_enabled:
+        st.success("🗄️ Database: Connected")
+        if st.session_state.current_project_id:
+            st.info(f"📁 Active Project")
+        if st.session_state.current_site_id:
+            st.info(f"📍 Active Site")
     else:
-        # Get all
-        query = self.client.table("eds_analyses").select("*")
+        st.warning("🗄️ Standalone Mode")
     
-    result = query.order("created_at", desc=True).execute()
-    return result.data if result.data else []
-
+    st.markdown("---")
+    
+    # Version info
+    st.caption("TaphoSpec v2.2")
+    st.caption("TraceoLab - ULiège")
 
 # ================================================
-# HELPER FUNCTIONS
+# PAGE ROUTING - Update to use session_state.page
 # ================================================
 
-def get_sample_with_residues(self, sample_id: str) -> Dict:
-    """Get sample with all residues and their EDS analyses"""
-    
-    # Get sample
-    sample_result = self.client.table("samples").select("*").eq("sample_id", sample_id).execute()
-    
-    if not sample_result.data:
-        return None
-    
-    sample = sample_result.data[0]
-    
-    # Get residues
-    residues = self.get_residues(sample_id=sample_id)
-    
-    # Get EDS analyses for each residue
-    for residue in residues:
-        residue['eds_analyses'] = self.get_eds_by_residue(residue['residue_id'])
-    
-    sample['residues'] = residues
-    
-    return sample
+# Replace your current page routing section with:
 
+page = st.session_state.get('page', 'Home')
 
-def import_residue_data(self, sample_id: str, data_rows: List[Dict]) -> Dict:
-    """
-    Import multiple EDS analyses grouped by residue
+if page == "Home" or page not in [
+    "Data Import", "Correlation Analysis", "Authentication", 
+    "Visual Attributes", "Report", "Project Management", 
+    "Site Map", "Statistics", "Library Search", 
+    "Library Management", "Admin Panel"
+]:
+    # HOME PAGE
+    st.markdown('<div class="main-header">🔬 TaphoSpec v2.2</div>', unsafe_allow_html=True)
+    st.markdown('<div class="sub-header">Archaeological Residue Authentication Platform</div>', unsafe_allow_html=True)
     
-    Expected format:
-    [
-        {
-            'residue': 1,
-            'point': 1,
-            'location': 'edge',
-            'color': 'black',
-            'c': 45.2,
-            'p': 1.8,
-            ...
-        },
-        ...
-    ]
-    """
+    st.markdown("---")
     
-    # Group by residue number
-    residues_data = {}
+    col1, col2, col3 = st.columns(3)
     
-    for row in data_rows:
-        residue_num = row.get('residue', 1)
-        
-        if residue_num not in residues_data:
-            residues_data[residue_num] = {
-                'residue_number': residue_num,
-                'location_on_tool': row.get('location'),
-                'visual_color': row.get('color'),
-                'visual_texture': row.get('texture'),
-                'visual_notes': row.get('visual_notes'),
-                'eds_points': []
-            }
-        
-        residues_data[residue_num]['eds_points'].append(row)
+    with col1:
+        st.markdown("### 🏛️ Archaeological Data")
+        st.markdown("""
+        Manage your excavation data:
+        - Organize sites and samples
+        - Import EDS analyses with residues
+        - Dataset statistics and overview
+        """)
+        if st.button("→ Go to Sites", key="home_sites"):
+            st.session_state.page = "Project Management"
+            st.rerun()
     
-    # Create residues and link EDS
-    created_residues = []
+    with col2:
+        st.markdown("### 🔍 Identification")
+        st.markdown("""
+        Identify unknown residues:
+        - Search library for matches
+        - Select specific analysis points
+        - Accept/reject identifications
+        """)
+        if st.button("→ Identify Unknown", key="home_identify"):
+            st.session_state.page = "Library Search"
+            st.rerun()
     
-    for residue_num, residue_info in residues_data.items():
-        # Create residue
-        residue = self.create_residue(
-            sample_id=sample_id,
-            residue_number=residue_num,
-            location_on_tool=residue_info.get('location_on_tool'),
-            visual_color=residue_info.get('visual_color'),
-            visual_texture=residue_info.get('visual_texture'),
-            visual_notes=residue_info.get('visual_notes')
-        )
-        
-        if not residue:
-            continue
-        
-        residue_id = residue['residue_id']
-        
-        # Create EDS analyses
-        for point_data in residue_info['eds_points']:
-            self.create_eds_analysis(
-                residue_id=residue_id,
-                analysis_point_number=point_data.get('point', 1),
-                c=point_data.get('c'),
-                n=point_data.get('n'),
-                o=point_data.get('o'),
-                p=point_data.get('p'),
-                ca=point_data.get('ca'),
-                k=point_data.get('k'),
-                al=point_data.get('al'),
-                mn=point_data.get('mn'),
-                fe=point_data.get('fe'),
-                si=point_data.get('si'),
-                mg=point_data.get('mg'),
-                na=point_data.get('na'),
-                s=point_data.get('s'),
-                cl=point_data.get('cl')
-            )
-        
-        created_residues.append(residue)
+    with col3:
+        st.markdown("### 📉 Site Analysis")
+        st.markdown("""
+        Analyze your dataset:
+        - Bulk authentication
+        - Element correlations
+        - Spatial patterns
+        - Generate reports
+        """)
+        if st.button("→ Start Analysis", key="home_analysis"):
+            st.session_state.page = "Correlation Analysis"
+            st.rerun()
     
-    return {
-        'sample_id': sample_id,
-        'residues_created': len(created_residues),
-        'residues': created_residues
-    }
+    st.markdown("---")
+    
+    if database_enabled and LIBRARY_PAGES_AVAILABLE:
+        st.markdown("### 📚 Reference Library")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.markdown("""
+            **Browse references:**
+            - View all library entries
+            - Search by material type
+            - Check availability
+            """)
+            if st.button("→ Browse Library", key="home_browse"):
+                st.session_state.page = "Library Search"
+                st.rerun()
+        
+        with col2:
+            st.markdown("""
+            **Manage entries:**
+            - Add new references
+            - Edit existing entries
+            - Quality verification
+            """)
+            if st.button("→ Manage Library", key="home_manage"):
+                st.session_state.page = "Library Management"
+                st.rerun()
+    
+    st.markdown("---")
+    
+    # Quick stats if database enabled
+    if database_enabled:
+        st.markdown("### 📊 Quick Statistics")
+        
+        try:
+            db = get_db_connection()
+            
+            col1, col2, col3, col4 = st.columns(4)
+            
+            with col1:
+                projects = db.get_projects()
+                st.metric("Projects", len(projects))
+            
+            with col2:
+                sites = db.get_sites()
+                st.metric("Sites", len(sites))
+            
+            with col3:
+                samples = db.get_samples()
+                st.metric("Samples", len(samples))
+            
+            with col4:
+                analyses = db.get_eds_analyses()
+                st.metric("EDS Analyses", len(analyses))
+            
+            if LIBRARY_PAGES_AVAILABLE:
+                col1, col2, col3 = st.columns(3)
+                
+                with col1:
+                    library = db.get_library_entries()
+                    st.metric("Library Entries", len(library))
+                
+                with col2:
+                    verified = len([e for e in library if e.get('verified', False)])
+                    st.metric("Verified", verified)
+                
+                with col3:
+                    searches = db.get_library_searches()
+                    st.metric("Searches", len(searches))
+        
+        except Exception as e:
+            st.info("Connect database to see statistics")
+
+elif page == "Data Import":
+    # Keep existing Data Import page code
+    pass
+
+elif page == "Correlation Analysis":
+    # Keep existing Correlation Analysis page code
+    pass
+
+elif page == "Authentication":
+    # Keep existing Authentication page code
+    pass
+
+elif page == "Visual Attributes":
+    # Keep existing Visual Attributes page code
+    pass
+
+elif page == "Report":
+    # Keep existing Report page code
+    pass
+
+elif page == "Project Management":
+    # Keep existing Project Management page code
+    pass
+
+elif page == "Site Map":
+    # Keep existing Site Map page code
+    pass
+
+elif page == "Statistics":
+    # Keep existing Statistics page code
+    pass
+
+elif page == "Library Search":
+    if database_enabled and LIBRARY_PAGES_AVAILABLE:
+        render_library_search_page()
+    else:
+        st.error("Library features not available")
+
+elif page == "Library Management":
+    if database_enabled and LIBRARY_PAGES_AVAILABLE:
+        render_library_management_page()
+    else:
+        st.error("Library features not available")
+
+elif page == "Admin Panel":
+    if AUTH_AVAILABLE and is_admin():
+        render_admin_panel()
+    else:
+        st.error("Access denied")
+
+# ================================================
+# NOTES FOR IMPLEMENTATION
+# ================================================
+
+"""
+CHANGES MADE:
+1. ✅ Collapsible sections with st.expander()
+2. ✅ Quick access buttons (Home, Identify)
+3. ✅ Page state in st.session_state.page
+4. ✅ 4 main categories:
+   - Archaeological Data
+   - Identification
+   - Site Analysis
+   - Reference Library
+5. ✅ Home page with overview and quick links
+6. ✅ Button-based navigation (not radio)
+7. ✅ use_container_width for consistent styling
+
+TO IMPLEMENT:
+1. Replace navigation section (lines 350-360) with code above
+2. Replace page routing section with new routing
+3. Add Home page code
+4. Keep all existing page implementations
+5. Test thoroughly!
+
+BENEFITS:
+- ✅ Clear logical grouping
+- ✅ Less clutter (collapsible)
+- ✅ Quick access to most-used features
+- ✅ Better UX for complex workflows
+- ✅ Room to grow (Taphonomy section ready)
+"""
