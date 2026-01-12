@@ -502,7 +502,6 @@ if page == "Home":
 
 # Page: Data Import
 elif page == "Data Import":
-if page == "Data Import":
     st.header("📁 Data Import")
     
     col1, col2 = st.columns([2, 1])
