@@ -46,6 +46,13 @@ if DATABASE_AVAILABLE:
         database_enabled = False
         print(f"Database connection failed: {e}")
 
+# Initialize authentication
+if AUTH_AVAILABLE:
+    try:
+        init_auth_session_state()
+    except Exception as e:
+        print(f"Auth initialization failed: {e}")
+
 
 # Page configuration
 st.set_page_config(
