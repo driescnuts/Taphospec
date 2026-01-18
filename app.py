@@ -48,307 +48,493 @@ st.set_page_config(
 st.markdown("""
 <style>
     .main-header {
-        font-size: 2.5rem;
+        font-size: 3rem;
         font-weight: bold;
-        color: #78350f;
+        color: #2E7D32;
+        text-align: center;
         margin-bottom: 0.5rem;
     }
     .sub-header {
-        font-size: 1rem;
-        color: #64748b;
-        margin-bottom: 0.25rem;
+        font-size: 1.2rem;
+        color: #555;
+        text-align: center;
+        margin-bottom: 2rem;
     }
     .metric-card {
-        background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
-        padding: 1.5rem;
-        border-radius: 0.5rem;
-        border: 1px solid #fbbf24;
-    }
-    .interpretation-box {
-        background-color: #f0f9ff;
+        background-color: #f0f2f6;
         padding: 1rem;
         border-radius: 0.5rem;
-        border-left: 4px solid #3b82f6;
-        margin: 1rem 0;
+        border-left: 4px solid #2E7D32;
     }
-    .warning-box {
-        background-color: #fef3c7;
-        padding: 1rem;
-        border-radius: 0.5rem;
-        border-left: 4px solid #f59e0b;
-        margin: 1rem 0;
-    }
-    .success-box {
-        background-color: #d1fae5;
-        padding: 1rem;
-        border-radius: 0.5rem;
-        border-left: 4px solid #10b981;
-        margin: 1rem 0;
-    }
-    .error-box {
-        background-color: #fee2e2;
-        padding: 1rem;
-        border-radius: 0.5rem;
-        border-left: 4px solid #ef4444;
-        margin: 1rem 0;
+    .stButton>button {
+        width: 100%;
     }
 </style>
 """, unsafe_allow_html=True)
 
-# ==============================================
-# AUTHENTICATION & DATABASE CONNECTION
-# ==============================================
+# ================================================
+# CONTEXT-AWARE AUTHENTICATION (v2.4)
+# ================================================
 
-# Initialize authentication
-if AUTH_AVAILABLE:
-    init_auth_session_state()
+# Context reference database with geoarchaeological citations
+CONTEXT_REFERENCES = {
+    "cave_guano": {
+        "name": "Cave (Guano-Rich)",
+        "key_papers": [
+            "Karkanas, P., Bar-Yosef, O., Goldberg, P., & Weiner, S. (2000). Diagenesis in prehistoric caves. Journal of Archaeological Science, 27(10), 915-929.",
+            "Weiner, S. (2010). Microarchaeology: Beyond the Visible Archaeological Record. Cambridge University Press.",
+            "Goldberg, P., Miller, C. E., & Mentzer, S. M. (2017). Recognizing fire in the Paleolithic archaeological record. Current Anthropology, 58(S16), S175-S190."
+        ],
+        "expected_signatures": {
+            "P_min": 3.0,
+            "P_max": 20.0,
+            "C_baseline": 10.0,
+            "Mn_indicator": 0.5
+        },
+        "corrections": {
+            "C_adjustment": True,
+            "P_baseline": 5.0
+        },
+        "interpretation": """
+        Guano-rich caves present unique taphonomic challenges:
+        - Elevated phosphorus (P) from bat/bird guano is EXPECTED, not contamination
+        - Carbon (C) enrichment from guano organics requires correction
+        - Manganese (Mn) >0.5% is diagnostic of bat guano (Karkanas 2000)
+        - Alkaline pH from guano promotes carbonate preservation
+        """,
+        "method": "Karkanas (2000) guano-cave criteria with corrections"
+    },
     
-    # Initialize database connection FIRST (needed for auth_manager)
-    if DATABASE_AVAILABLE:
-        try:
-            db = get_db_connection()
-            # Initialize auth manager BEFORE authentication check
-            if 'auth_manager' not in st.session_state:
-                st.session_state.auth_manager = AuthManager(db.client)
-            init_session_state_db()
-            database_enabled = True
-        except Exception as e:
-            database_enabled = False
-            st.error(f"⚠️ Database connection failed: {str(e)}")
-            st.info("Please check your Supabase credentials in Streamlit secrets.")
-            st.stop()
-    else:
-        st.error("⚠️ Database module not available. Please install dependencies.")
-        st.stop()
+    "cave_carbonate": {
+        "name": "Cave (Carbonate-Rich)",
+        "key_papers": [
+            "Karkanas, P., & Goldberg, P. (2019). Reconstructing Archaeological Sites. Wiley-Blackwell.",
+            "Shahack-Gross, R. (2011). Herbivorous livestock dung. Journal of Archaeological Science, 38(2), 205-218."
+        ],
+        "expected_signatures": {
+            "P_min": 0.5,
+            "P_max": 3.0
+        },
+        "interpretation": """
+        Carbonate-rich caves provide moderate preservation:
+        - Alkaline pH (typically 8-9) promotes carbonate formation
+        - Calcium (Ca) enrichment from speleothem formation
+        - Moderate organic preservation
+        """,
+        "method": "Standard Karkanas & Weiner (2010) with carbonate consideration"
+    },
     
-    # NOW check authentication (auth_manager is initialized)
-    if not check_authentication():
-        st.stop()  # Stop execution if not authenticated
-        
-else:
-    # No authentication - original behavior
-    if DATABASE_AVAILABLE:
-        try:
-            db = get_db_connection()
-            init_session_state_db()
-            database_enabled = True
-        except Exception as e:
-            database_enabled = False
-            st.sidebar.warning("⚠️ Database not configured. Running in standalone mode.")
-    else:
-        database_enabled = False
-
-# Authentication functions
-def authenticate_residue(row):
-    """
-    Authenticate residue based on diagnostic elemental criteria.
-    """
-    # Convert to float, handle non-numeric values
-    def safe_float(value):
-        try:
-            return float(value) if pd.notna(value) else 0.0
-        except (ValueError, TypeError):
-            return 0.0
+    "open_air_sand": {
+        "name": "Open-Air (Sand/Sandstone)",
+        "key_papers": [
+            "Goldberg, P., & Berna, F. (2010). Micromorphology and context. Quaternary International, 214(1-2), 56-62.",
+            "Miller, C. E., Goldberg, P., & Berna, F. (2013). Geoarchaeological investigations at Diepkloof. Journal of Archaeological Science, 40(9), 3432-3452."
+        ],
+        "expected_signatures": {
+            "P_min": 0.1,
+            "P_max": 2.0,
+            "C_max": 15.0
+        },
+        "corrections": {
+            "leaching_factor": 0.5
+        },
+        "interpretation": """
+        Open-air sites present POOR preservation conditions:
+        - Phosphorus (P) depletion due to leaching (Goldberg & Berna 2010)
+        - Rapid oxidation destroys organics
+        - Silicon (Si) enrichment from sand/sandstone matrix
+        - Surviving organics indicate EXCEPTIONAL preservation
+        """,
+        "method": "Goldberg & Berna (2010) open-air criteria with leaching correction"
+    },
     
-    C = safe_float(row.get('C', 0))
-    Mn = safe_float(row.get('Mn', 0))
-    P = safe_float(row.get('P', 0))
-    Ca = safe_float(row.get('Ca', 0))
-    K = safe_float(row.get('K', 0))
-    Al = safe_float(row.get('Al', 0))
-    Fe = safe_float(row.get('Fe', 0))
+    "open_air_clay": {
+        "name": "Open-Air (Clay/Silt)",
+        "key_papers": [
+            "Goldberg, P., & Berna, F. (2010). Micromorphology and context.",
+            "Macphail, R. I., & Goldberg, P. (2018). Applied Soils and Micromorphology. Cambridge."
+        ],
+        "expected_signatures": {
+            "P_min": 0.2,
+            "P_max": 3.0
+        },
+        "interpretation": """
+        Clay-rich open-air sites offer better preservation than sand:
+        - Clay minerals can sequester and protect organics
+        - Moderate P retention
+        """,
+        "method": "Modified Karkanas & Weiner for clay contexts"
+    },
     
-    ca_p_ratio = Ca / P if P > 0 else None
+    "rockshelter": {
+        "name": "Rockshelter",
+        "key_papers": [
+            "Karkanas, P., et al. (2007). Evidence for habitual use of fire. Journal of Human Evolution, 53(2), 197-212.",
+            "Goldberg, P., et al. (2009). Bedding, hearths at Sibudu Cave. Archaeological Sciences, 1(2), 95-122."
+        ],
+        "expected_signatures": {
+            "P_min": 0.5,
+            "P_max": 5.0
+        },
+        "interpretation": """
+        Rockshelters offer GOOD intermediate preservation:
+        - Protection from direct weathering
+        - Variable pH depending on bedrock geology
+        """,
+        "method": "Standard Karkanas & Weiner (2010) criteria"
+    },
     
-    # Diagnostic criteria
-    criteria = {
-        'organic_adhesive': C > 25 and Mn < 1 and P < 3,
-        'organic_adhesive_ochre': C > 20 and Fe > 5 and Mn < 1 and P < 5,
-        'mn_phosphate': Mn > 5,
-        'apatite': P > 10 and ca_p_ratio and 1.5 <= ca_p_ratio <= 1.8 and C < 10,
-        'k_al_phosphate': K > 2 and Al > 2 and P > 5,
-        'partially_mineralized': 15 <= C <= 25 and 1 <= Mn <= 5 and 3 <= P <= 8
+    "peat_bog": {
+        "name": "Peat Bog",
+        "key_papers": [
+            "van Geel, B. (2001). Non-pollen palynomorphs. Tracking Environmental Change. Springer.",
+            "Harrault, L., et al. (2019). Faecal biomarkers distinguish species. PLoS ONE, 14(2)."
+        ],
+        "expected_signatures": {
+            "P_min": 0.0,
+            "P_max": 0.5
+        },
+        "corrections": {
+            "ignore_ca_p": True
+        },
+        "interpretation": """
+        Peat bogs provide EXCEPTIONAL organic preservation:
+        - Acidic conditions (pH 3-5) destroy mineral residues
+        - Waterlogged anaerobic environment preserves organics
+        - Ca/P ratios are MEANINGLESS - ignore mineral indicators
+        """,
+        "method": "Bog-specific organic-only analysis"
     }
+}
+
+def authenticate_with_context(data, site_context):
+    """Apply context-specific authentication criteria"""
     
-    # Classification logic
-    if criteria['mn_phosphate']:
-        return {
-            'classification': 'Mn-Phosphate Mineral Mimic',
-            'confidence': 'High',
-            'color': '#ef4444',
-            'reasoning': [f"Mn > 5% ({Mn:.1f}%) is diagnostic for Mn-bearing phosphates"],
-            'recommendation': '✗ Exclude from organic residue analysis',
-            'ca_p_ratio': ca_p_ratio
-        }
-    elif criteria['apatite']:
-        return {
-            'classification': 'Apatite (Biogenic)',
-            'confidence': 'High',
-            'color': '#f97316',
-            'reasoning': [
-                f"P > 10% ({P:.1f}%) with Ca/P ratio {ca_p_ratio:.2f}",
-                f"Low carbon ({C:.1f}%) confirms mineral phase"
-            ],
-            'recommendation': '✗ Exclude from organic residue analysis',
-            'ca_p_ratio': ca_p_ratio
-        }
-    elif criteria['k_al_phosphate']:
-        return {
-            'classification': 'K-Al Phosphate (Acidic Diagenesis)',
-            'confidence': 'High',
-            'color': '#f59e0b',
-            'reasoning': [f"K > 2%, Al > 2%, P > 5% indicates taranakite/leucophosphite"],
-            'recommendation': '✗ Exclude from organic residue analysis',
-            'ca_p_ratio': ca_p_ratio
-        }
-    elif criteria['organic_adhesive']:
-        return {
-            'classification': 'Organic Adhesive',
-            'confidence': 'High',
-            'color': '#10b981',
-            'reasoning': [
-                f"C > 25% ({C:.1f}%) indicates preserved organic material",
-                f"Mn < 1% ({Mn:.2f}%) excludes Mn-bearing phases",
-                f"P < 3% ({P:.1f}%) indicates minimal mineralization"
-            ],
-            'recommendation': '✓ Proceed with FTIR/GC-MS',
-            'ca_p_ratio': ca_p_ratio
-        }
-    elif criteria['organic_adhesive_ochre']:
-        return {
-            'classification': 'Ochre-Loaded Compound Adhesive',
-            'confidence': 'High',
-            'color': '#059669',
-            'reasoning': [
-                f"C > 20% ({C:.1f}%) with Fe > 5% ({Fe:.1f}%)",
-                f"Mn < 1% excludes Mn-bearing mineral mimics"
-            ],
-            'recommendation': '✓ Proceed with FTIR/GC-MS',
-            'ca_p_ratio': ca_p_ratio
-        }
-    elif criteria['partially_mineralized']:
-        return {
-            'classification': 'Partially Mineralized Organic',
-            'confidence': 'Medium',
-            'color': '#eab308',
-            'reasoning': [
-                f"Moderate C ({C:.1f}%), Mn ({Mn:.1f}%), P ({P:.1f}%)",
-                "Suggests organic material undergoing mineralization"
-            ],
-            'recommendation': '⚠ Caution: Detailed SEM morphology assessment needed',
-            'ca_p_ratio': ca_p_ratio
-        }
-    elif C > 15 and Mn < 1 and P < 5:
-        return {
-            'classification': 'Possible Organic Material',
-            'confidence': 'Medium',
-            'color': '#84cc16',
-            'reasoning': [
-                f"C > 15% ({C:.1f}%) but below organic threshold",
-                "Consider molecular confirmation"
-            ],
-            'recommendation': '? Additional analyses needed',
-            'ca_p_ratio': ca_p_ratio
-        }
+    context_type = site_context.get('context_type', 'unknown')
+    
+    if context_type in CONTEXT_REFERENCES:
+        context_params = CONTEXT_REFERENCES[context_type]
     else:
-        return {
-            'classification': 'Ambiguous',
-            'confidence': 'Low',
-            'color': '#94a3b8',
-            'reasoning': ["Mixed elemental signature"],
-            'recommendation': '? Additional analyses needed',
-            'ca_p_ratio': ca_p_ratio
-        }
+        return authenticate_standard(data)
+    
+    results = data.copy()
+    
+    # Apply context-specific logic
+    if context_type == "cave_guano":
+        results = authenticate_guano_cave(results, context_params, site_context)
+    elif "open_air" in context_type:
+        results = authenticate_open_air(results, context_params, site_context)
+    elif context_type == "peat_bog":
+        results = authenticate_peat_bog(results, context_params)
+    else:
+        results = authenticate_standard(results)
+    
+    return {
+        'results': results,
+        'methodology': context_params['method'],
+        'references': context_params['key_papers'],
+        'interpretation': context_params['interpretation']
+    }
 
-def calculate_correlations(df):
-    """Calculate diagnostic elemental correlations."""
-    correlations = []
+def authenticate_guano_cave(data, context_params, site_context):
+    """Apply guano-cave specific authentication"""
     
-    correlation_pairs = [
-        {
-            'x': 'P', 'y': 'Ca', 'name': 'P-Ca',
-            'interpretation': 'Calcium phosphate mineralisation (guano diagenesis)',
-            'context': 'Phosphoric acid from guano decomposition combines with calcium from bones, shells, or ash to form calcium phosphate minerals',
-            'threshold': 0.7,
-            'expected': 'positive',
-            'reference': 'Weiner et al. 2002'
-        },
-        {
-            'x': 'K', 'y': 'Al', 'name': 'K-Al',
-            'interpretation': 'K-Al phosphate formation (acidic conditions)',
-            'context': 'Under strongly acidic conditions (pH <5), K and Al combine with phosphate to form taranakite and leucophosphite',
-            'threshold': 0.6,
-            'expected': 'positive',
-            'reference': 'Karkanas et al. 2002; Mentzer et al. 2014'
-        },
-        {
-            'x': 'K', 'y': 'P', 'name': 'K-P',
-            'interpretation': 'K incorporation into phosphate structures',
-            'context': 'Potassium incorporation indicates acidic diagenetic conditions',
-            'threshold': 0.6,
-            'expected': 'positive',
-            'reference': 'Karkanas et al. 2002'
-        },
-        {
-            'x': 'C', 'y': 'P', 'name': 'C-P',
-            'interpretation': 'Organic carbon replacement by phosphates',
-            'context': 'Negative correlation shows phosphate mineralisation systematically replaces organic carbon',
-            'threshold': -0.3,
-            'expected': 'negative',
-            'reference': 'Shahack-Gross et al. 2004'
-        },
-        {
-            'x': 'C', 'y': 'Mn', 'name': 'C-Mn',
-            'interpretation': 'Organic carbon replacement by Mn oxides/phosphates',
-            'context': 'Manganese mobilised under reducing conditions replaces organic carbon',
-            'threshold': -0.2,
-            'expected': 'negative',
-            'reference': 'Weiner et al. 2002'
-        },
-        {
-            'x': 'Fe', 'y': 'P', 'name': 'Fe-P',
-            'interpretation': 'Iron phosphate vs. iron oxide formation',
-            'context': 'Helps distinguish iron phosphates from ochre (iron oxides)',
-            'threshold': 0.5,
-            'expected': 'positive',
-            'reference': 'This study'
-        }
-    ]
+    results = data.copy()
+    guano_baseline_P = context_params['corrections']['P_baseline']
     
-    for pair in correlation_pairs:
-        if pair['x'] in df.columns and pair['y'] in df.columns:
-            # Filter valid data
-            valid_data = df[[pair['x'], pair['y']]].dropna()
-            valid_data = valid_data[(valid_data > 0).all(axis=1)]
+    for idx, row in results.iterrows():
+        C = row.get('c', 0)
+        P = row.get('p', 0)
+        Mn = row.get('mn', 0)
+        Ca = row.get('ca', 0)
+        
+        corrected_P = max(0, P - guano_baseline_P)
+        
+        if Mn > context_params['expected_signatures']['Mn_indicator']:
+            results.at[idx, 'guano_indicator'] = f"Bat guano (Mn={Mn:.2f}%)"
+        
+        if C > 10 and P > 5:
+            guano_C_contribution = (P / guano_baseline_P) * context_params['expected_signatures']['C_baseline']
+            corrected_C = max(0, C - guano_C_contribution)
+            results.at[idx, 'corrected_c'] = corrected_C
+        else:
+            results.at[idx, 'corrected_c'] = C
+        
+        corrected_C_val = results.at[idx, 'corrected_c']
+        
+        if corrected_C_val > 20:
+            classification = "Organic"
+            confidence = "High" if corrected_P < 2 else "Medium"
+        elif corrected_P > 10 and Ca/P < 2.0 if P > 0 else False:
+            classification = "Apatite"
+            confidence = "Medium"
+        elif corrected_C_val < 5 and corrected_P < 2:
+            classification = "Mimic"
+            confidence = "High"
+        else:
+            classification = "Mixed/Uncertain"
+            confidence = "Low"
+        
+        results.at[idx, 'context_adjusted_classification'] = classification
+        results.at[idx, 'confidence_level'] = confidence
+    
+    return results
+
+def authenticate_open_air(data, context_params, site_context):
+    """Apply open-air specific authentication"""
+    
+    results = data.copy()
+    
+    for idx, row in results.iterrows():
+        C = row.get('c', 0)
+        P = row.get('p', 0)
+        Si = row.get('si', 0)
+        
+        if Si > 20:
+            results.at[idx, 'contamination_note'] = f"High Si ({Si:.1f}%) - sediment contamination"
+        
+        if C > 20:
+            results.at[idx, 'context_adjusted_classification'] = "Organic (Exceptional!)"
+            results.at[idx, 'confidence_level'] = "High"
+        elif P > context_params['expected_signatures']['P_max']:
+            results.at[idx, 'context_adjusted_classification'] = "Apatite (Unexpected)"
+            results.at[idx, 'confidence_level'] = "Low"
+        elif C < 10 and P < 1:
+            results.at[idx, 'context_adjusted_classification'] = "Mimic (Expected)"
+            results.at[idx, 'confidence_level'] = "High"
+        else:
+            results.at[idx, 'context_adjusted_classification'] = "Mixed/Degraded"
+            results.at[idx, 'confidence_level'] = "Medium"
+    
+    return results
+
+def authenticate_peat_bog(data, context_params):
+    """Apply peat bog specific authentication"""
+    
+    results = data.copy()
+    
+    for idx, row in results.iterrows():
+        C = row.get('c', 0)
+        P = row.get('p', 0)
+        
+        if C > 30:
+            results.at[idx, 'context_adjusted_classification'] = "Organic (Well-Preserved)"
+            results.at[idx, 'confidence_level'] = "High"
+        elif C > 15:
+            results.at[idx, 'context_adjusted_classification'] = "Organic (Moderate)"
+            results.at[idx, 'confidence_level'] = "Medium"
+        elif P > 1:
+            results.at[idx, 'context_adjusted_classification'] = "Anomalous (mineral in bog)"
+            results.at[idx, 'confidence_level'] = "Low"
+        else:
+            results.at[idx, 'context_adjusted_classification'] = "Uncertain"
+            results.at[idx, 'confidence_level'] = "Low"
+    
+    return results
+
+def authenticate_standard(data):
+    """Standard Karkanas & Weiner (2010) criteria"""
+    
+    results = data.copy()
+    
+    for idx, row in results.iterrows():
+        C = row.get('c', 0)
+        P = row.get('p', 0)
+        Ca = row.get('ca', 0)
+        Ca_P = Ca/P if P > 0 else 0
+        
+        if C > 20 and P < 3:
+            classification = "Organic"
+            confidence = "High"
+        elif P > 10 and 1.2 < Ca_P < 2.2:
+            classification = "Apatite"
+            confidence = "High"
+        elif C < 10 and P < 3:
+            classification = "Mimic"
+            confidence = "High"
+        else:
+            classification = "Mixed/Uncertain"
+            confidence = "Medium"
+        
+        results.at[idx, 'context_adjusted_classification'] = classification
+        results.at[idx, 'confidence_level'] = confidence
+    
+    return results
+
+
+
+# ================================================
+# HELPER FUNCTIONS FOR ENHANCED SITE FORM
+# ================================================
+
+def get_context_description(context_type):
+    '''Get brief description of expected signatures'''
+    descriptions = {
+        "cave_guano": "High P (3-20%), Mn indicator for bat guano",
+        "cave_carbonate": "High Ca, moderate P (0.5-3%)",
+        "open_air_sand": "Low P (<2%), Si contamination",
+        "peat_bog": "Very low P, excellent organic preservation"
+    }
+    return descriptions.get(context_type, "See literature for expected signatures")
+
+def render_enhanced_site_form(db):
+    '''Enhanced site registration form with full taphonomic context'''
+    
+    with st.expander("➕ Register New Site with Full Context", expanded=False):
+        with st.form("new_site_context"):
+            st.markdown("### Basic Site Information")
             
-            if len(valid_data) >= 3:
-                r, p_value = pearsonr(valid_data[pair['x']], valid_data[pair['y']])
-                
-                significant = (
-                    (pair['expected'] == 'positive' and r > abs(pair['threshold'])) or
-                    (pair['expected'] == 'negative' and r < pair['threshold'])
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                site_name = st.text_input("Site Name*", placeholder="e.g., Spy Cave")
+                country = st.text_input("Country*", placeholder="e.g., Belgium")
+                region = st.text_input("Region", placeholder="e.g., Wallonia")
+            
+            with col2:
+                latitude = st.number_input("Latitude*", min_value=-90.0, max_value=90.0, value=50.48, format="%.6f")
+                longitude = st.number_input("Longitude*", min_value=-180.0, max_value=180.0, value=4.72, format="%.6f")
+                elevation = st.number_input("Elevation (m)", value=200)
+            
+            st.markdown("---")
+            st.markdown("### 🌍 Geographic Context")
+            
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                climate_zone = st.selectbox("Climate Zone*", [
+                    "Tropical", "Subtropical", "Temperate",
+                    "Mediterranean", "Arid/Semi-arid", "Arctic"
+                ])
+            
+            with col2:
+                rainfall = st.selectbox("Rainfall", [
+                    "Humid (>1000mm)", "Moderate (500-1000mm)",
+                    "Dry (<500mm)", "Variable"
+                ])
+            
+            st.markdown("---")
+            st.markdown("### 🏛️ Depositional Context")
+            st.info("⚠️ This determines authentication criteria!")
+            
+            context_type = st.selectbox("Primary Context*", [
+                "cave_guano", "cave_carbonate", "cave_other",
+                "rockshelter", "open_air_sand", "open_air_clay",
+                "open_air_loess", "peat_bog", "volcanic_ash", "other"
+            ], format_func=lambda x: {
+                "cave_guano": "🦇 Cave (Guano-Rich)",
+                "cave_carbonate": "🪨 Cave (Carbonate)",
+                "cave_other": "🕳️ Cave (Other)",
+                "rockshelter": "🏔️ Rockshelter",
+                "open_air_sand": "🏖️ Open-Air (Sand)",
+                "open_air_clay": "🧱 Open-Air (Clay)",
+                "open_air_loess": "🌾 Open-Air (Loess)",
+                "peat_bog": "🌿 Peat Bog",
+                "volcanic_ash": "🌋 Volcanic Ash",
+                "other": "❓ Other"
+            }.get(x, x))
+            
+            if context_type in ["cave_guano", "open_air_sand", "peat_bog"]:
+                st.caption(f"ℹ️ {get_context_description(context_type)}")
+            
+            st.markdown("---")
+            st.markdown("### 🧪 Taphonomic Factors")
+            
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                ph_condition = st.selectbox("pH Conditions", [
+                    "Acidic (pH <6)", "Neutral (pH 6-8)",
+                    "Alkaline (pH >8)", "Unknown"
+                ])
+            
+            with col2:
+                water_table = st.selectbox("Water Regime", [
+                    "Saturated", "Seasonal", "Well-Drained", "Unknown"
+                ])
+            
+            guano_presence = st.checkbox("🦇 Bat/Bird Guano Present")
+            
+            st.markdown("---")
+            st.markdown("### 📊 Expected Preservation")
+            
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                organic_preservation = st.select_slider(
+                    "Organic Preservation",
+                    options=["Very Poor", "Poor", "Fair", "Good", "Excellent"],
+                    value="Fair"
                 )
-                
-                correlations.append({
-                    **pair,
-                    'r': r,
-                    'p_value': p_value,
-                    'n': len(valid_data),
-                    'significant': significant,
-                    'x_data': valid_data[pair['x']].values,
-                    'y_data': valid_data[pair['y']].values
-                })
-    
-    return correlations
+            
+            with col2:
+                mineral_preservation = st.select_slider(
+                    "Mineral Preservation",
+                    options=["Very Poor", "Poor", "Fair", "Good", "Excellent"],
+                    value="Fair"
+                )
+            
+            st.markdown("---")
+            st.markdown("### 📚 References")
+            
+            site_references = st.text_area(
+                "Key Publications",
+                placeholder="e.g., Goldberg et al. (2009)...",
+                height=80
+            )
+            
+            taphonomic_notes = st.text_area(
+                "Taphonomic Notes",
+                placeholder="Additional observations...",
+                height=80
+            )
+            
+            st.markdown("---")
+            
+            submitted = st.form_submit_button("✅ Register Site", type="primary")
+            
+            if submitted and site_name and country:
+                try:
+                    # Get or create project
+                    projects = db.get_projects()
+                    if not projects or len(projects) == 0:
+                        default_project = db.create_project(
+                            project_name="Default Project",
+                            description="Auto-created"
+                        )
+                        project_id = default_project['project_id']
+                    else:
+                        project_id = projects[0]['project_id']
+                    
+                    # Create site
+                    site_data = {
+                        "project_id": project_id,
+                        "site_name": site_name,
+                        "country": country,
+                        "latitude": latitude,
+                        "longitude": longitude,
+                        "elevation": elevation,
+                        "climate_zone": climate_zone,
+                        "context_type": context_type,
+                        "ph_condition": ph_condition,
+                        "water_table": water_table,
+                        "guano_presence": guano_presence,
+                        "organic_preservation": organic_preservation,
+                        "site_references": site_references,
+                        "taphonomic_notes": taphonomic_notes
+                    }
+                    
+                    site = db.client.table("sites").insert(site_data).execute()
+                    
+                    if site.data:
+                        st.success(f"✅ Registered: {site_name} with context!")
+                        st.session_state.current_site_id = site.data[0]['site_id']
+                        st.rerun()
+                    
+                except Exception as e:
+                    st.error(f"Error: {str(e)}")
+                    st.exception(e)
 
-# Header
-st.markdown('<div class="main-header">🔬 TaphoSpec</div>', unsafe_allow_html=True)
-st.markdown('<div class="sub-header">Multi-Modal Spectroscopic Analysis Platform for Archaeological Residue Authentication</div>', unsafe_allow_html=True)
-st.markdown('<div class="sub-header" style="font-size: 0.8rem; margin-bottom: 2rem;">TraceoLab · University of Liège · v1.0 Phase 1</div>', unsafe_allow_html=True)
-
-# Sidebar
-
-# ==============================================
 # NAVIGATION - v2.3 CLEAN STRUCTURE
 # ==============================================
 
@@ -470,9 +656,7 @@ page = st.session_state.get('page', 'Home')
 # HOME PAGE
 # ==============================================
 if page == "Home":
-    st.markdown('<div class="main-header">🔬 TaphoSpec v2.2</div>', unsafe_allow_html=True)
-    st.markdown('<div class="sub-header">Archaeological Residue Authentication Platform</div>', unsafe_allow_html=True)
-    
+    # Don't add another title - Streamlit shows page_title already
     st.markdown("---")
     
     # Quick overview cards
@@ -1140,183 +1324,153 @@ elif page == "Report":
 # Page: Project Management
 elif page == "Sites" and database_enabled:
     st.header("📁 Sites")
+    st.markdown("### Manage Your Archaeological Sites")
     
-    tab1, tab2, tab3 = st.tabs(["Projects", "Sites", "Data Import"])
+    tab1, tab2 = st.tabs(["Sites", "Samples"])
     
     with tab1:
-        st.subheader("Your Projects")
+        st.subheader("Your Sites")
         
-        # Create new project
-        with st.expander("➕ Create New Project"):
-            with st.form("new_project"):
+        # Create new site
+        with st.expander("➕ Register New Site"):
+            with st.form("new_site"):
                 col1, col2 = st.columns(2)
                 
                 with col1:
-                    proj_name = st.text_input("Project Name*", placeholder="e.g., Krapina Analysis 2024")
-                    pi_name = st.text_input("Principal Investigator", placeholder="Your name")
+                    site_name = st.text_input("Site Name*", placeholder="e.g., Spy Cave")
+                    country = st.text_input("Country", placeholder="e.g., Belgium")
+                    latitude = st.number_input("Latitude", min_value=-90.0, max_value=90.0, value=50.48, format="%.6f")
+                    longitude = st.number_input("Longitude", min_value=-180.0, max_value=180.0, value=4.72, format="%.6f")
                 
                 with col2:
-                    institution = st.text_input("Institution", placeholder="University of Liège")
-                    is_public = st.checkbox("Make public (visible to all users)", value=False)
+                    context_type = st.selectbox(
+                        "Taphonomic Context",
+                        ["cave", "rockshelter", "open_air", "other"]
+                    )
+                    time_period = st.text_input("Time Period", placeholder="e.g., Middle Palaeolithic")
+                    excavation_year = st.number_input("Excavation Year", min_value=1800, max_value=2026, value=2024)
                 
-                description = st.text_area("Description", placeholder="Brief project description...")
+                site_notes = st.text_area("Notes", placeholder="Additional site information...")
                 
-                submitted = st.form_submit_button("Create Project")
+                submitted = st.form_submit_button("Register Site")
                 
-                if submitted and proj_name:
+                if submitted and site_name:
                     try:
-                        project = db.create_project(
-                            project_name=proj_name,
-                            description=description,
-                            principal_investigator=pi_name,
-                            institution=institution,
-                            is_public=is_public
+                        # Create a default project if none exists
+                        projects = db.get_projects()
+                        if not projects or len(projects) == 0:
+                            # Create default project
+                            default_project = db.create_project(
+                                project_name="Default Project",
+                                description="Auto-created default project"
+                            )
+                            project_id = default_project['project_id']
+                        else:
+                            # Use first project
+                            project_id = projects[0]['project_id']
+                        
+                        site = db.create_site(
+                            project_id=project_id,
+                            site_name=site_name,
+                            latitude=latitude,
+                            longitude=longitude,
+                            country=country,
+                            context_type=context_type,
+                            time_period=time_period,
+                            excavation_year=excavation_year,
+                            site_notes=site_notes
                         )
-                        st.success(f"✅ Created project: {proj_name}")
-                        st.session_state.current_project_id = project['project_id']
+                        st.success(f"✅ Registered site: {site_name}")
+                        st.session_state.current_site_id = site['site_id']
                         st.rerun()
                     except Exception as e:
-                        st.error(f"Error creating project: {str(e)}")
+                        st.error(f"Error creating site: {str(e)}")
         
-        # List existing projects
+        # List sites
         try:
-            projects_df = db.get_projects()
+            sites = db.get_sites()
             
-            if len(projects_df) > 0:
-                for _, project in projects_df.iterrows():
+            if sites and len(sites) > 0:
+                for site in sites:
                     with st.container():
                         col1, col2, col3 = st.columns([3, 2, 1])
                         
                         with col1:
-                            st.markdown(f"### {project['project_name']}")
-                            if project.get('description'):
-                                st.caption(project['description'])
+                            st.markdown(f"### 📍 {site['site_name']}")
+                            if site.get('country'):
+                                st.caption(f"{site['country']}")
                         
                         with col2:
-                            if project.get('principal_investigator'):
-                                st.write(f"👤 {project['principal_investigator']}")
-                            if project.get('institution'):
-                                st.caption(project['institution'])
+                            if site.get('latitude') and site.get('longitude'):
+                                st.write(f"🗺️ {site['latitude']:.4f}, {site['longitude']:.4f}")
+                            if site.get('context_type'):
+                                st.caption(f"Context: {site['context_type']}")
                         
                         with col3:
-                            if st.button("Select", key=f"proj_{project['project_id']}"):
-                                st.session_state.current_project_id = project['project_id']
+                            if st.button("Select", key=f"site_{site['site_id']}"):
+                                st.session_state.current_site_id = site['site_id']
                                 st.rerun()
                         
                         st.markdown("---")
             else:
-                st.info("No projects yet. Create your first project above!")
+                st.info("No sites registered yet. Add your first site above!")
                 
         except Exception as e:
-            st.error(f"Error loading projects: {str(e)}")
+            st.error(f"Error loading sites: {str(e)}")
     
     with tab2:
-        st.subheader("Sites")
-        
-        if not st.session_state.current_project_id:
-            st.warning("⚠️ Please select a project first (Projects tab)")
-        else:
-            # Create new site
-            with st.expander("➕ Register New Site"):
-                with st.form("new_site"):
-                    col1, col2 = st.columns(2)
-                    
-                    with col1:
-                        site_name = st.text_input("Site Name*", placeholder="e.g., Krapina Cave")
-                        country = st.text_input("Country", placeholder="e.g., Croatia")
-                        latitude = st.number_input("Latitude*", min_value=-90.0, max_value=90.0, value=0.0, format="%.6f")
-                        longitude = st.number_input("Longitude*", min_value=-180.0, max_value=180.0, value=0.0, format="%.6f")
-                    
-                    with col2:
-                        context_type = st.selectbox(
-                            "Taphonomic Context",
-                            ["cave_guano", "cave_carbonate", "rockshelter", "open_air_sand", 
-                             "open_air_clay", "peat_bog", "volcanic_ash", "other"]
-                        )
-                        sediment_type = st.text_input("Sediment Type", placeholder="e.g., guano-rich")
-                        time_period = st.text_input("Time Period", placeholder="e.g., Middle Palaeolithic")
-                        excavation_year = st.number_input("Excavation Year", min_value=1800, max_value=2026, value=2024)
-                    
-                    site_notes = st.text_area("Notes", placeholder="Additional site information...")
-                    
-                    submitted = st.form_submit_button("Register Site")
-                    
-                    if submitted and site_name and latitude != 0.0 and longitude != 0.0:
-                        try:
-                            site = db.create_site(
-                                project_id=st.session_state.current_project_id,
-                                site_name=site_name,
-                                latitude=latitude,
-                                longitude=longitude,
-                                country=country,
-                                context_type=context_type,
-                                sediment_type=sediment_type,
-                                time_period=time_period,
-                                excavation_year=excavation_year,
-                                site_notes=site_notes
-                            )
-                            st.success(f"✅ Registered site: {site_name}")
-                            st.session_state.current_site_id = site['site_id']
-                            st.rerun()
-                        except Exception as e:
-                            st.error(f"Error creating site: {str(e)}")
-            
-            # List sites
-            try:
-                sites_df = db.get_sites(st.session_state.current_project_id)
-                
-                if len(sites_df) > 0:
-                    for _, site in sites_df.iterrows():
-                        with st.container():
-                            col1, col2, col3 = st.columns([3, 2, 1])
-                            
-                            with col1:
-                                st.markdown(f"### 📍 {site['site_name']}")
-                                if site.get('country'):
-                                    st.caption(f"{site['country']}")
-                            
-                            with col2:
-                                st.write(f"🗺️ {site['latitude']:.4f}, {site['longitude']:.4f}")
-                                if site.get('context_type'):
-                                    st.caption(f"Context: {site['context_type']}")
-                            
-                            with col3:
-                                if st.button("Select", key=f"site_{site['site_id']}"):
-                                    st.session_state.current_site_id = site['site_id']
-                                    st.rerun()
-                            
-                            st.markdown("---")
-                else:
-                    st.info("No sites registered yet. Add your first site above!")
-                    
-            except Exception as e:
-                st.error(f"Error loading sites: {str(e)}")
-    
-    with tab3:
-        st.subheader("💾 Save Current Data to Database")
+        st.subheader("Samples & Residues")
         
         if not st.session_state.current_site_id:
             st.warning("⚠️ Please select a site first (Sites tab)")
-        elif st.session_state.data is None:
-            st.warning("⚠️ No data loaded. Please import data first (Data Import page)")
         else:
-            st.info(f"Ready to save {len(st.session_state.data)} analyses to database")
-            
-            sample_prefix = st.text_input("Sample Prefix", value="AUTO", help="Prefix for auto-generated sample codes")
-            
-            if st.button("💾 Save to Database", type="primary"):
-                try:
-                    with st.spinner("Saving to database..."):
-                        n_samples, n_analyses = db.import_eds_data_from_dataframe(
-                            df=st.session_state.data,
-                            site_id=st.session_state.current_site_id,
-                            sample_prefix=sample_prefix
-                        )
+            try:
+                # Get selected site info
+                sites = db.get_sites()
+                current_site = next((s for s in sites if s['site_id'] == st.session_state.current_site_id), None)
+                
+                if current_site:
+                    st.info(f"📍 Selected site: **{current_site['site_name']}**")
+                
+                # Get samples for this site
+                samples = db.get_samples(site_id=st.session_state.current_site_id)
+                
+                if samples and len(samples) > 0:
+                    st.success(f"Found {len(samples)} samples")
                     
-                    st.success(f"✅ Saved {n_samples} samples with {n_analyses} analyses!")
+                    for sample in samples:
+                        with st.expander(f"🔬 {sample['sample_code']}"):
+                            # Show sample info
+                            if sample.get('tool_type'):
+                                st.write(f"**Tool Type:** {sample['tool_type']}")
+                            if sample.get('raw_material'):
+                                st.write(f"**Raw Material:** {sample['raw_material']}")
+                            
+                            # Get residues for this sample
+                            if hasattr(db, 'get_residues'):
+                                residues = db.get_residues(sample_id=sample['sample_id'])
+                                
+                                if residues and len(residues) > 0:
+                                    st.markdown("**Residues:**")
+                                    for residue in residues:
+                                        st.write(f"- Residue #{residue['residue_number']}: {residue.get('location_on_tool', 'Unknown location')}")
+                                        
+                                        # Get EDS analyses for this residue
+                                        eds_analyses = db.get_eds_analyses(residue_id=residue['residue_id'])
+                                        if eds_analyses:
+                                            st.caption(f"  └─ {len(eds_analyses)} EDS analysis points")
+                                else:
+                                    st.caption("No residues recorded")
+                            else:
+                                # Fallback if residues not available
+                                eds_analyses = db.get_eds_analyses(sample_id=sample['sample_id'])
+                                if eds_analyses:
+                                    st.caption(f"{len(eds_analyses)} EDS analyses")
+                else:
+                    st.info("No samples yet. Import data to add samples.")
                     
-                except Exception as e:
-                    st.error(f"Error saving to database: {str(e)}")
+            except Exception as e:
+                st.error(f"Error loading samples: {str(e)}")
 
 # Page: Site Map
 elif page == "Site Map" and database_enabled:
