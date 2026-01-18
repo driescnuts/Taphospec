@@ -35,6 +35,17 @@ try:
 except ImportError:
     LIBRARY_PAGES_AVAILABLE = False
 
+# Initialize database connection
+database_enabled = False
+db = None
+if DATABASE_AVAILABLE:
+    try:
+        db = get_db_connection()
+        database_enabled = True
+    except Exception as e:
+        database_enabled = False
+        print(f"Database connection failed: {e}")
+
 
 # Page configuration
 st.set_page_config(
