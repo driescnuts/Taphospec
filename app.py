@@ -349,7 +349,7 @@ st.markdown('<div class="sub-header" style="font-size: 0.8rem; margin-bottom: 2r
 # Sidebar
 
 # ==============================================
-# NAVIGATION - v2.2 COLLAPSIBLE STRUCTURE
+# NAVIGATION - v2.3 CLEAN STRUCTURE
 # ==============================================
 
 # Initialize session state for page navigation
@@ -357,7 +357,7 @@ if 'page' not in st.session_state:
     st.session_state.page = "Home"
 
 with st.sidebar:
-    st.header("🔬 TaphoSpec v2.2")
+    st.header("🔬 TaphoSpec v2.3")
     
     # Quick Access Buttons
     col1, col2 = st.columns(2)
@@ -370,45 +370,57 @@ with st.sidebar:
     
     st.markdown("---")
     
+    # ================================================
     # ARCHAEOLOGICAL DATA Section
+    # ================================================
     with st.expander("🏛️ ARCHAEOLOGICAL DATA", expanded=True):
         if st.button("📁 Sites", use_container_width=True, key="nav_sites"):
-            st.session_state.page = "Project Management"
+            st.session_state.page = "Sites"
         if st.button("📥 Import Analyses", use_container_width=True, key="nav_import"):
             st.session_state.page = "Data Import"
         if database_enabled:
             if st.button("📊 Dataset Statistics", use_container_width=True, key="nav_stats"):
                 st.session_state.page = "Statistics"
     
+    # ================================================
     # IDENTIFICATION Section  
+    # ================================================
     if database_enabled and LIBRARY_PAGES_AVAILABLE:
         with st.expander("🔍 IDENTIFICATION", expanded=False):
             if st.button("🔍 Identify Unknown", use_container_width=True, key="nav_identify"):
                 st.session_state.page = "Library Search"
     
-    # SITE ANALYSIS Section
-    with st.expander("📉 SITE ANALYSIS", expanded=False):
+    # ================================================
+    # TAPHONOMIC ANALYSIS Section
+    # ================================================
+    with st.expander("🧪 TAPHONOMIC ANALYSIS", expanded=False):
         if st.button("🎯 Bulk Authentication", use_container_width=True, key="nav_auth"):
             st.session_state.page = "Authentication"
         if st.button("📊 Correlations", use_container_width=True, key="nav_corr"):
             st.session_state.page = "Correlation Analysis"
-        if database_enabled:
-            if st.button("🗺️ Spatial Patterns", use_container_width=True, key="nav_map"):
-                st.session_state.page = "Site Map"
-        if st.button("📋 Reports", use_container_width=True, key="nav_report"):
-            st.session_state.page = "Report"
-        if st.button("👁️ Visual Attributes", use_container_width=True, key="nav_visual"):
-            st.session_state.page = "Visual Attributes"
     
+    # ================================================
+    # REPORTS Section
+    # ================================================
+    with st.expander("📋 REPORTS", expanded=False):
+        if st.button("📋 Site Reports", use_container_width=True, key="nav_report"):
+            st.session_state.page = "Report"
+    
+    # ================================================
     # REFERENCE LIBRARY Section
+    # ================================================
     if database_enabled and LIBRARY_PAGES_AVAILABLE:
         with st.expander("📚 REFERENCE LIBRARY", expanded=False):
-            if st.button("📖 Browse & Search", use_container_width=True, key="nav_browse"):
-                st.session_state.page = "Library Search"
             if st.button("➕ Manage Entries", use_container_width=True, key="nav_manage"):
                 st.session_state.page = "Library Management"
+            if st.button("🗺️ Reference Origins", use_container_width=True, key="nav_origins"):
+                st.session_state.page = "Reference Origins"
+            if st.button("📊 Library Statistics", use_container_width=True, key="nav_libstats"):
+                st.session_state.page = "Library Statistics"
     
+    # ================================================
     # SETTINGS Section (Admin only)
+    # ================================================
     if AUTH_AVAILABLE and is_admin():
         st.markdown("---")
         if st.button("⚙️ Admin Panel", use_container_width=True, key="nav_admin"):
@@ -433,7 +445,7 @@ with st.sidebar:
     st.markdown("---")
     
     # Version info
-    st.caption("TaphoSpec v2.2 with Residues")
+    st.caption("TaphoSpec v2.3 - Clean Structure")
     st.caption("TraceoLab - ULiège")
 
 if 'data' not in st.session_state:
@@ -474,7 +486,7 @@ if page == "Home":
         - Dataset statistics
         """)
         if st.button("→ Sites", key="home_sites"):
-            st.session_state.page = "Project Management"
+            st.session_state.page = "Sites"
             st.rerun()
     
     with col2:
@@ -1126,8 +1138,8 @@ elif page == "Report":
 # ==============================================
 
 # Page: Project Management
-elif page == "Project Management" and database_enabled:
-    st.header("📁 Project Management")
+elif page == "Sites" and database_enabled:
+    st.header("📁 Sites")
     
     tab1, tab2, tab3 = st.tabs(["Projects", "Sites", "Data Import"])
     
@@ -1438,6 +1450,135 @@ elif page == "Library Search" and database_enabled and LIBRARY_PAGES_AVAILABLE:
 # Page: Library Management  
 elif page == "Library Management" and database_enabled and LIBRARY_PAGES_AVAILABLE:
     render_library_management_page(db)
+
+
+# Page: Reference Origins (Geographic distribution of library references)
+elif page == "Reference Origins" and database_enabled and LIBRARY_PAGES_AVAILABLE:
+    st.header("🗺️ Reference Origins")
+    st.markdown("### Geographic Distribution of Reference Library")
+    
+    try:
+        db = get_db_connection()
+        library_entries = db.get_library_entries()
+        
+        if library_entries:
+            # Get unique sources/locations from library
+            locations = []
+            for entry in library_entries:
+                source = entry.get('source', '')
+                if source:
+                    locations.append({
+                        'name': entry.get('name', 'Unknown'),
+                        'source': source,
+                        'type': entry.get('type', 'unknown'),
+                        'material': entry.get('material_type', 'unknown')
+                    })
+            
+            if locations:
+                st.success(f"Found {len(locations)} library entries with source information")
+                
+                # Group by source
+                from collections import Counter
+                source_counts = Counter([loc['source'] for loc in locations])
+                
+                col1, col2 = st.columns([2, 1])
+                
+                with col1:
+                    st.markdown("#### Reference Sources")
+                    for source, count in source_counts.most_common():
+                        with st.expander(f"📍 {source} ({count} references)"):
+                            source_entries = [loc for loc in locations if loc['source'] == source]
+                            for entry in source_entries:
+                                st.markdown(f"- **{entry['name']}** ({entry['type']}) - {entry['material']}")
+                
+                with col2:
+                    st.markdown("#### Statistics")
+                    st.metric("Total Sources", len(source_counts))
+                    st.metric("Total References", len(locations))
+                    
+                    type_counts = Counter([loc['type'] for loc in locations])
+                    st.markdown("**By Type:**")
+                    for ref_type, count in type_counts.items():
+                        st.write(f"- {ref_type}: {count}")
+                
+                st.markdown("---")
+                st.markdown("#### Material Distribution")
+                material_counts = Counter([loc['material'] for loc in locations])
+                
+                import plotly.express as px
+                fig = px.pie(
+                    values=list(material_counts.values()),
+                    names=list(material_counts.keys()),
+                    title="Reference Library Materials"
+                )
+                st.plotly_chart(fig, use_container_width=True)
+            else:
+                st.info("No source information available. Add source details when creating references.")
+        else:
+            st.info("No library entries yet. Add references first.")
+    except Exception as e:
+        st.error(f"Error: {str(e)}")
+
+# Page: Library Statistics
+elif page == "Library Statistics" and database_enabled and LIBRARY_PAGES_AVAILABLE:
+    st.header("📊 Library Statistics")
+    st.markdown("### Reference Library Composition and Coverage")
+    
+    try:
+        db = get_db_connection()
+        library_entries = db.get_library_entries()
+        
+        if library_entries:
+            from collections import Counter
+            
+            col1, col2, col3 = st.columns(3)
+            
+            with col1:
+                st.metric("Total Entries", len(library_entries))
+            
+            with col2:
+                verified = len([e for e in library_entries if e.get('verified', False)])
+                st.metric("Verified", verified)
+            
+            with col3:
+                pct = (verified / len(library_entries) * 100) if library_entries else 0
+                st.metric("Verified %", f"{pct:.1f}%")
+            
+            st.markdown("---")
+            
+            # Type distribution
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                st.markdown("#### By Type")
+                type_counts = Counter([e.get('type', 'unknown') for e in library_entries])
+                for ref_type, count in type_counts.most_common():
+                    st.write(f"**{ref_type}:** {count}")
+            
+            with col2:
+                st.markdown("#### By Material")
+                material_counts = Counter([e.get('material_type', 'unknown') for e in library_entries])
+                for material, count in material_counts.most_common():
+                    st.write(f"**{material}:** {count}")
+            
+            st.markdown("---")
+            
+            # Visualization
+            import plotly.graph_objects as go
+            fig = go.Figure()
+            fig.add_trace(go.Bar(
+                x=list(material_counts.keys()),
+                y=list(material_counts.values()),
+                name="Materials"
+            ))
+            fig.update_layout(title="Library Materials Distribution")
+            st.plotly_chart(fig, use_container_width=True)
+            
+        else:
+            st.info("No library entries yet.")
+    except Exception as e:
+        st.error(f"Error: {str(e)}")
+
 
 # Page: Admin Panel
 elif page == "Admin Panel" and AUTH_AVAILABLE and is_admin():
