@@ -199,6 +199,18 @@ def init_auth_session_state():
     
     if 'is_admin' not in st.session_state:
         st.session_state.is_admin = False
+    
+    # Initialize auth_manager if not present
+    if 'auth_manager' not in st.session_state:
+        try:
+            # Get database connection
+            from database import get_db_connection
+            db = get_db_connection()
+            # Create auth manager with supabase client
+            st.session_state.auth_manager = AuthManager(db.client)
+        except Exception as e:
+            # Could not initialize - will be handled by render_login_page
+            st.session_state.auth_manager = None
 
 
 def render_login_page():
