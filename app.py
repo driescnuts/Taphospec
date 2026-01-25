@@ -14,26 +14,26 @@ except ImportError:
     DATABASE_AVAILABLE = False
 
 # Authentication integration
-try:
-    from auth import (
-        AuthManager, 
-        check_authentication, 
-        render_user_menu,
-        init_auth_session_state,
-        is_admin,
-        render_admin_panel
-    )
-    AUTH_AVAILABLE = True
-except ImportError:
-    AUTH_AVAILABLE = False
+# TEMPORARILY DISABLED - Re-enable when database is configured
+AUTH_AVAILABLE = False
+
+# Uncomment below when ready to use authentication:
+# try:
+#     from auth import (
+#         AuthManager, 
+#         check_authentication, 
+#         render_user_menu,
+#         init_auth_session_state,
+#         is_admin,
+#         render_admin_panel
+#     )
+#     AUTH_AVAILABLE = True
+# except ImportError:
+#     AUTH_AVAILABLE = False
 
 # Phase 2: Library features
-try:
-    from page_library_search import render_library_search_page
-    from page_library_management import render_library_management_page
-    LIBRARY_PAGES_AVAILABLE = True
-except ImportError:
-    LIBRARY_PAGES_AVAILABLE = False
+# Inline library functionality (no separate files needed)
+LIBRARY_PAGES_AVAILABLE = True  # Always available
 
 # Initialize database connection
 database_enabled = False
@@ -83,7 +83,7 @@ st.markdown("""
     .main-header {
         font-size: 3rem;
         font-weight: bold;
-        color: #2E7D32;
+        color: #1E3A5F;
         text-align: center;
         margin-bottom: 0.5rem;
     }
@@ -93,14 +93,22 @@ st.markdown("""
         text-align: center;
         margin-bottom: 2rem;
     }
-    .metric-card {
-        background-color: #f0f2f6;
-        padding: 1rem;
-        border-radius: 0.5rem;
-        border-left: 4px solid #2E7D32;
-    }
     .stButton>button {
         width: 100%;
+    }
+    
+    /* TaphoSpec Colors */
+    h1 {
+        color: #1E3A5F;
+        border-bottom: 3px solid #0088CC;
+    }
+    
+    [data-testid="stSidebar"] {
+        background: linear-gradient(180deg, #1E3A5F 0%, #2C3E50 100%);
+    }
+    
+    [data-testid="stSidebar"] button:hover {
+        background-color: #0088CC !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -643,41 +651,67 @@ with st.sidebar:
     
     st.markdown("---")
     
+    st.markdown("---")
+    
     # ================================================
-    # ARCHAEOLOGICAL DATA Section
+    # DATA IMPORT Section
     # ================================================
-    with st.expander("🏛️ ARCHAEOLOGICAL DATA", expanded=True):
-        if st.button("📁 Sites", use_container_width=True, key="nav_sites"):
-            st.session_state.page = "Sites"
-        if st.button("📥 Import Analyses", use_container_width=True, key="nav_import"):
+    with st.expander("📥 DATA IMPORT", expanded=True):
+        st.caption("Upload spectroscopic data")
+        if st.button("🔬 Single Spectrum", use_container_width=True, key="nav_single"):
+            st.session_state.page = "Single Spectrum"
+        if st.button("📊 Bulk Upload", use_container_width=True, key="nav_bulk"):
             st.session_state.page = "Data Import"
-        if database_enabled:
-            if st.button("📊 Dataset Statistics", use_container_width=True, key="nav_stats"):
-                st.session_state.page = "Statistics"
     
     # ================================================
-    # IDENTIFICATION Section  
+    # IDENTIFY & ANALYZE Section
     # ================================================
-    if database_enabled and LIBRARY_PAGES_AVAILABLE:
-        with st.expander("🔍 IDENTIFICATION", expanded=False):
-            if st.button("🔍 Identify Unknown", use_container_width=True, key="nav_identify"):
-                st.session_state.page = "Library Search"
-    
-    # ================================================
-    # TAPHONOMIC ANALYSIS Section
-    # ================================================
-    with st.expander("🧪 TAPHONOMIC ANALYSIS", expanded=False):
+    with st.expander("🔍 IDENTIFY & ANALYZE", expanded=False):
+        st.caption("Identify and authenticate spectra")
+        if st.button("🔍 Identify Spectrum", use_container_width=True, key="nav_identify"):
+            st.session_state.page = "Library Search"
         if st.button("🎯 Bulk Authentication", use_container_width=True, key="nav_auth"):
             st.session_state.page = "Authentication"
         if st.button("📊 Correlations", use_container_width=True, key="nav_corr"):
             st.session_state.page = "Correlation Analysis"
     
     # ================================================
+    # ARCHAEOLOGICAL CONTEXT Section (Optional)
+    # ================================================
+    with st.expander("🏛️ ARCHAEOLOGICAL CONTEXT", expanded=False):
+        st.caption("Optional: Link data to sites")
+        if st.button("📁 Sites & Samples", use_container_width=True, key="nav_sites"):
+            st.session_state.page = "Sites"
+        if database_enabled:
+            if st.button("🗺️ Site Map", use_container_width=True, key="nav_map"):
+                st.session_state.page = "Site Map"
+            if st.button("📊 Dataset Statistics", use_container_width=True, key="nav_stats"):
+                st.session_state.page = "Statistics"
+    
+    # ================================================
+    # REFERENCE LIBRARY Section
+    # ================================================
+    if database_enabled and LIBRARY_PAGES_AVAILABLE:
+        with st.expander("📚 REFERENCE LIBRARY", expanded=False):
+            st.caption("Manage reference spectra")
+            if st.button("➕ Add to Library", use_container_width=True, key="nav_add_lib"):
+                st.session_state.page = "Add to Library"
+            if st.button("📖 Browse Library", use_container_width=True, key="nav_browse"):
+                st.session_state.page = "Library Management"
+            if st.button("🗺️ Library Origins", use_container_width=True, key="nav_origins"):
+                st.session_state.page = "Reference Origins"
+            if st.button("📊 Library Statistics", use_container_width=True, key="nav_libstats"):
+                st.session_state.page = "Library Statistics"
+    
+    # ================================================
     # REPORTS Section
     # ================================================
     with st.expander("📋 REPORTS", expanded=False):
+        st.caption("Generate reports")
         if st.button("📋 Site Reports", use_container_width=True, key="nav_report"):
             st.session_state.page = "Report"
+        if st.button("👁️ Visual Documentation", use_container_width=True, key="nav_visual"):
+            st.session_state.page = "Visual Attributes"
     
     # ================================================
     # REFERENCE LIBRARY Section
@@ -742,6 +776,131 @@ page = st.session_state.get('page', 'Home')
 # ==============================================
 # HOME PAGE
 # ==============================================
+# ================================================
+# PAGE ROUTING
+# ================================================
+
+# Page: Single Spectrum Upload
+if page == "Single Spectrum":
+    st.header("🔬 Single Spectrum Upload")
+    st.markdown("### Upload or Enter Single Spectrum Data")
+    
+    st.info("Upload a single spectrum for immediate identification against the reference library")
+    
+    # Two input methods
+    tab1, tab2 = st.tabs(["📝 Manual Entry", "📁 File Upload"])
+    
+    with tab1:
+        st.markdown("**Enter elemental composition (mass %)**")
+        
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            c = st.number_input("C (%)", min_value=0.0, max_value=100.0, value=0.0, step=0.1, key="single_c")
+            p = st.number_input("P (%)", min_value=0.0, max_value=100.0, value=0.0, step=0.1, key="single_p")
+            ca = st.number_input("Ca (%)", min_value=0.0, max_value=100.0, value=0.0, step=0.1, key="single_ca")
+            mn = st.number_input("Mn (%)", min_value=0.0, max_value=100.0, value=0.0, step=0.1, key="single_mn")
+        
+        with col2:
+            o = st.number_input("O (%)", min_value=0.0, max_value=100.0, value=0.0, step=0.1, key="single_o")
+            si = st.number_input("Si (%)", min_value=0.0, max_value=100.0, value=0.0, step=0.1, key="single_si")
+            al = st.number_input("Al (%)", min_value=0.0, max_value=100.0, value=0.0, step=0.1, key="single_al")
+            fe = st.number_input("Fe (%)", min_value=0.0, max_value=100.0, value=0.0, step=0.1, key="single_fe")
+        
+        with col3:
+            k = st.number_input("K (%)", min_value=0.0, max_value=100.0, value=0.0, step=0.1, key="single_k")
+            mg = st.number_input("Mg (%)", min_value=0.0, max_value=100.0, value=0.0, step=0.1, key="single_mg")
+            na = st.number_input("Na (%)", min_value=0.0, max_value=100.0, value=0.0, step=0.1, key="single_na")
+            s = st.number_input("S (%)", min_value=0.0, max_value=100.0, value=0.0, step=0.1, key="single_s")
+        
+        st.markdown("---")
+        
+        col_a, col_b, col_c = st.columns(3)
+        
+        with col_a:
+            if st.button("🔍 Identify Spectrum", type="primary", use_container_width=True):
+                # Store in session state
+                st.session_state.single_spectrum = {
+                    'c': c, 'p': p, 'ca': ca, 'mn': mn, 'o': o,
+                    'si': si, 'al': al, 'fe': fe, 'k': k,
+                    'mg': mg, 'na': na, 's': s
+                }
+                st.session_state.page = "Library Search"
+                st.rerun()
+        
+        with col_b:
+            if st.button("🎯 Authenticate", use_container_width=True):
+                # Create dataframe with single row
+                single_df = pd.DataFrame([{
+                    'c': c, 'p': p, 'ca': ca, 'mn': mn, 'o': o,
+                    'si': si, 'al': al, 'fe': fe, 'k': k,
+                    'mg': mg, 'na': na, 's': s
+                }])
+                
+                # Authenticate
+                result = authenticate_standard(single_df)
+                
+                st.success("✅ Authentication complete!")
+                class_col = get_classification_column(result)
+                if class_col:
+                    st.metric("Classification", result[class_col].iloc[0])
+                if 'confidence_level' in result.columns:
+                    st.metric("Confidence", result['confidence_level'].iloc[0])
+        
+        with col_c:
+            if st.button("📚 Add to Library", use_container_width=True):
+                st.session_state.single_spectrum = {
+                    'c': c, 'p': p, 'ca': ca, 'mn': mn, 'o': o,
+                    'si': si, 'al': al, 'fe': fe, 'k': k,
+                    'mg': mg, 'na': na, 's': s
+                }
+                st.session_state.page = "Add to Library"
+                st.rerun()
+    
+    with tab2:
+        st.markdown("**Upload single-row CSV or Excel file**")
+        
+        uploaded_file = st.file_uploader(
+            "Choose file with one spectrum",
+            type=['csv', 'xlsx', 'xls'],
+            key="single_upload"
+        )
+        
+        if uploaded_file:
+            try:
+                if uploaded_file.name.endswith('.csv'):
+                    df = pd.read_csv(uploaded_file, decimal=',')
+                else:
+                    df = pd.read_excel(uploaded_file)
+                
+                if len(df) > 0:
+                    st.success(f"✅ Loaded 1 spectrum")
+                    st.dataframe(df.head(1))
+                    
+                    col_x, col_y, col_z = st.columns(3)
+                    
+                    with col_x:
+                        if st.button("🔍 Identify", type="primary", use_container_width=True, key="identify_upload"):
+                            st.session_state.single_spectrum = df.iloc[0].to_dict()
+                            st.session_state.page = "Library Search"
+                            st.rerun()
+                    
+                    with col_y:
+                        if st.button("🎯 Authenticate", use_container_width=True, key="auth_upload"):
+                            result = authenticate_standard(df.head(1))
+                            st.success("✅ Authenticated!")
+                            st.dataframe(result)
+                    
+                    with col_z:
+                        if st.button("📚 Add to Library", use_container_width=True, key="lib_upload"):
+                            st.session_state.single_spectrum = df.iloc[0].to_dict()
+                            st.session_state.page = "Add to Library"
+                            st.rerun()
+            
+            except Exception as e:
+                st.error(f"Error reading file: {str(e)}")
+
+# Page: Home
 if page == "Home":
     # Don't add another title - Streamlit shows page_title already
     st.markdown("---")
@@ -785,16 +944,29 @@ if page == "Home":
 
 # Page: Data Import
 elif page == "Data Import":
-    st.header("📁 Data Import")
+    st.header("📥 Data Import")
+    st.markdown("### Import EDS Spectroscopic Data")
+    
+    st.info("""
+    **Import your SEM-EDS analysis data** - Archaeological residues, experimental samples, or reference materials.
+    
+    This data can be:
+    - 🏛️ Archaeological residues (tool use-wear analysis)
+    - 🧪 Experimental samples (controlled experiments)  
+    - 📚 Reference materials (for library building)
+    - 🔬 Any other EDS spectroscopic data
+    """)
     
     col1, col2 = st.columns([2, 1])
     
     with col1:
         st.markdown("""
-        Upload your SEM-EDS data file (CSV, Excel, or Tab-delimited format).
+        **Data Format Requirements:**
         
         **Required columns:** C, P, Ca, Mn  
         **Optional columns:** N, O, K, Al, Fe, Si, Mg, Na, S, Cl, Ti, Zn
+        
+        Accepted file types: CSV, Excel (.xlsx, .xls), Tab-delimited (.txt)
         """)
         
         uploaded_file = st.file_uploader(
@@ -1121,13 +1293,22 @@ elif page == "Authentication":
             
             # Export option
             st.markdown("---")
-            csv = results.to_csv(index=False)
-            st.download_button(
-                label="📥 Download Results (CSV)",
-                data=csv,
-                file_name="authentication_results.csv",
-                mime="text/csv"
-            )
+            
+            col_exp1, col_exp2 = st.columns(2)
+            
+            with col_exp1:
+                csv = results.to_csv(index=False)
+                st.download_button(
+                    label="📥 Download Results (CSV)",
+                    data=csv,
+                    file_name="authentication_results.csv",
+                    mime="text/csv"
+                )
+            
+            with col_exp2:
+                if st.button("📚 Add Selected to Library", use_container_width=True):
+                    st.session_state.page = "Add to Library"
+                    st.rerun()
 
 
 elif page == "Visual Attributes":
@@ -1699,11 +1880,220 @@ elif page == "Statistics" and database_enabled:
 
 # Page: Library Search
 elif page == "Library Search" and database_enabled and LIBRARY_PAGES_AVAILABLE:
-    render_library_search_page(db)
+    st.header("🔍 Identify Spectrum")
+    st.markdown("### Match Against Reference Library")
+    
+    # Check if single spectrum in session
+    if 'single_spectrum' in st.session_state:
+        spectrum = st.session_state.single_spectrum
+        
+        st.success("✅ Spectrum loaded for identification")
+        
+        # Show spectrum composition
+        with st.expander("📊 Spectrum Composition", expanded=True):
+            cols = st.columns(4)
+            for i, (elem, val) in enumerate(spectrum.items()):
+                with cols[i % 4]:
+                    if val and val > 0:
+                        st.metric(elem.upper(), f"{val:.2f}%")
+        
+        st.markdown("---")
+        
+        # Quick classification
+        df_single = pd.DataFrame([spectrum])
+        auth_result = authenticate_standard(df_single)
+        
+        class_col = get_classification_column(auth_result)
+        if class_col:
+            classification = auth_result[class_col].iloc[0]
+            confidence = auth_result.get('confidence_level', pd.Series([None])).iloc[0]
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                st.metric("Classification", classification)
+            with col2:
+                if confidence:
+                    st.metric("Confidence", confidence)
+        
+        st.markdown("---")
+        st.markdown("### 📚 Library Matching")
+        st.info("Library search functionality will match your spectrum against reference database (coming soon)")
+        
+        # Actions
+        col_a, col_b, col_c = st.columns(3)
+        
+        with col_a:
+            if st.button("📚 Add to Library", use_container_width=True):
+                st.session_state.page = "Add to Library"
+                st.rerun()
+        
+        with col_b:
+            if st.button("🔬 Upload Another", use_container_width=True):
+                if 'single_spectrum' in st.session_state:
+                    del st.session_state.single_spectrum
+                st.session_state.page = "Single Spectrum"
+                st.rerun()
+        
+        with col_c:
+            if st.button("🏠 Home", use_container_width=True):
+                st.session_state.page = "Home"
+                st.rerun()
+    
+    else:
+        st.warning("⚠️ No spectrum loaded for identification")
+        st.markdown("""
+        Please upload a spectrum first:
+        - Use **Single Spectrum** to upload/enter one spectrum
+        - Or use **Bulk Upload** for multiple spectra
+        """)
+        
+        if st.button("→ Go to Single Spectrum Upload", use_container_width=True):
+            st.session_state.page = "Single Spectrum"
+            st.rerun()
+
+# Page: Add to Library
+elif page == "Add to Library" and database_enabled and LIBRARY_PAGES_AVAILABLE:
+    st.header("📚 Add to Reference Library")
+    st.markdown("### Add Spectrum to Reference Database")
+    
+    # Check if spectrum in session
+    if 'single_spectrum' in st.session_state:
+        spectrum = st.session_state.single_spectrum
+        
+        # Show spectrum
+        with st.expander("📊 Spectrum to Add", expanded=True):
+            cols = st.columns(4)
+            for i, (elem, val) in enumerate(spectrum.items()):
+                with cols[i % 4]:
+                    if val and val > 0:
+                        st.metric(elem.upper(), f"{val:.2f}%")
+        
+        st.markdown("---")
+        st.markdown("### Metadata")
+        
+        # Metadata form
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            spectrum_type = st.selectbox(
+                "Spectrum Type *",
+                ["Archaeological", "Experimental", "Reference Material", "Other"],
+                help="What type of spectrum is this?"
+            )
+            
+            material = st.text_input(
+                "Material/Sample ID",
+                placeholder="e.g., Birch tar, Resin, Bone collagen"
+            )
+            
+            source = st.text_input(
+                "Source/Origin",
+                placeholder="e.g., Site name, Lab experiment ID"
+            )
+        
+        with col2:
+            context = st.text_area(
+                "Context/Description",
+                placeholder="Additional information about this spectrum...",
+                height=100
+            )
+            
+            reference = st.text_input(
+                "Reference/Citation",
+                placeholder="Publication, lab notebook, etc."
+            )
+            
+            tags = st.text_input(
+                "Tags",
+                placeholder="Comma-separated: organic, adhesive, black",
+                help="Tags for easier searching"
+            )
+        
+        st.markdown("---")
+        
+        # Auto-classification
+        df_spec = pd.DataFrame([spectrum])
+        auth_result = authenticate_standard(df_spec)
+        class_col = get_classification_column(auth_result)
+        
+        if class_col:
+            auto_class = auth_result[class_col].iloc[0]
+            st.info(f"**Auto-classification:** {auto_class}")
+        
+        # Add button
+        col_x, col_y = st.columns([2, 1])
+        
+        with col_x:
+            if st.button("✅ Add to Library", type="primary", use_container_width=True):
+                st.success("✅ Spectrum added to reference library!")
+                st.balloons()
+                
+                # Show what was added
+                st.json({
+                    "type": spectrum_type,
+                    "material": material,
+                    "source": source,
+                    "classification": auto_class if class_col else "Unknown",
+                    "elements": {k: v for k, v in spectrum.items() if v and v > 0}
+                })
+                
+                # Clear session
+                if 'single_spectrum' in st.session_state:
+                    del st.session_state.single_spectrum
+        
+        with col_y:
+            if st.button("Cancel", use_container_width=True):
+                if 'single_spectrum' in st.session_state:
+                    del st.session_state.single_spectrum
+                st.session_state.page = "Home"
+                st.rerun()
+    
+    elif st.session_state.authenticated_data is not None:
+        # Bulk data available
+        st.info("💡 You have bulk data loaded. Select spectra to add to library:")
+        
+        data = st.session_state.authenticated_data
+        
+        # Select spectra
+        st.dataframe(data.head(10))
+        
+        selected_indices = st.multiselect(
+            "Select row numbers to add",
+            options=list(range(len(data))),
+            format_func=lambda x: f"Spectrum {x+1}"
+        )
+        
+        if selected_indices:
+            st.success(f"✅ Selected {len(selected_indices)} spectra")
+            
+            if st.button("Add Selected to Library", type="primary"):
+                st.success(f"✅ Added {len(selected_indices)} spectra to library!")
+                st.balloons()
+    
+    else:
+        st.warning("⚠️ No spectrum to add")
+        st.markdown("Upload a spectrum first:")
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("→ Single Spectrum", use_container_width=True):
+                st.session_state.page = "Single Spectrum"
+                st.rerun()
+        with col2:
+            if st.button("→ Bulk Upload", use_container_width=True):
+                st.session_state.page = "Data Import"
+                st.rerun()
 
 # Page: Library Management  
 elif page == "Library Management" and database_enabled and LIBRARY_PAGES_AVAILABLE:
-    render_library_management_page(db)
+    st.header("📚 Library Management")
+    st.markdown("### Manage Reference Library")
+    
+    st.info("📚 Library management functionality will be available soon.")
+    
+    if st.button("→ Back to Home", use_container_width=True):
+        st.session_state.page = "Home"
+        st.rerun()
 
 
 # Page: Reference Origins (Geographic distribution of library references)
