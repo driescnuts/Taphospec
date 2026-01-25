@@ -77,7 +77,7 @@ try:
 except:
     LOGO_AVAILABLE = False
 
-# Custom CSS - TaphoSpec Sidebar Fix
+# Custom CSS - TaphoSpec Light Sidebar Theme
 st.markdown("""
 <style>
     /* ========== MAIN CONTENT ========== */
@@ -101,58 +101,63 @@ st.markdown("""
         padding-bottom: 0.5rem;
     }
     
-    /* ========== SIDEBAR STYLING ========== */
+    /* ========== SIDEBAR - LIGHT THEME ========== */
     [data-testid="stSidebar"] {
-        background: linear-gradient(180deg, #1E3A5F 0%, #2C3E50 100%);
+        background: linear-gradient(180deg, #F8F9FA 0%, #E9ECEF 100%);
         padding-top: 1rem;
     }
     
-    /* Make ALL sidebar text white and visible */
+    /* Make ALL sidebar text DARK and visible */
     [data-testid="stSidebar"] * {
-        color: #FFFFFF !important;
+        color: #1E3A5F !important;  /* TaphoSpec Navy */
     }
     
-    /* Sidebar buttons */
+    /* Sidebar buttons - Light with blue accents */
     [data-testid="stSidebar"] button {
-        background-color: rgba(255, 255, 255, 0.15) !important;
-        color: #FFFFFF !important;
-        border: 1px solid rgba(255, 255, 255, 0.3) !important;
+        background-color: #FFFFFF !important;
+        color: #1E3A5F !important;
+        border: 2px solid #0088CC !important;
         border-radius: 8px !important;
         padding: 0.5rem 1rem !important;
         font-weight: 500 !important;
         transition: all 0.2s ease !important;
         margin: 0.2rem 0 !important;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
     }
     
     [data-testid="stSidebar"] button:hover {
         background-color: #0088CC !important;
+        color: #FFFFFF !important;
         border-color: #0088CC !important;
         transform: translateX(3px);
-        box-shadow: 0 2px 8px rgba(0, 136, 204, 0.4);
+        box-shadow: 0 4px 8px rgba(0, 136, 204, 0.3);
     }
     
-    /* Expander headers */
+    /* Expander headers - Light blue background */
     [data-testid="stSidebar"] .streamlit-expanderHeader {
-        background-color: rgba(255, 255, 255, 0.1) !important;
+        background-color: #E3F2FD !important;  /* Light blue */
+        border-left: 4px solid #0088CC !important;
         border-radius: 6px !important;
         padding: 0.75rem 1rem !important;
         margin: 0.5rem 0 !important;
         font-weight: 600 !important;
         font-size: 0.95rem !important;
+        color: #1E3A5F !important;
     }
     
     [data-testid="stSidebar"] .streamlit-expanderHeader:hover {
-        background-color: rgba(255, 255, 255, 0.15) !important;
+        background-color: #BBDEFB !important;  /* Darker blue on hover */
     }
     
     /* Expanded content area */
     [data-testid="stSidebar"] .streamlit-expanderContent {
         padding: 0.5rem 0.25rem !important;
+        background-color: #FAFAFA !important;
     }
     
     /* Captions in sidebar */
     [data-testid="stSidebar"] .caption {
-        color: rgba(255, 255, 255, 0.7) !important;
+        color: #546E7A !important;  /* Gray-blue */
         font-size: 0.85rem !important;
         margin-bottom: 0.5rem !important;
         padding-left: 0.5rem;
@@ -160,14 +165,21 @@ st.markdown("""
     
     /* Dividers */
     [data-testid="stSidebar"] hr {
-        border-color: rgba(255, 255, 255, 0.2) !important;
+        border-color: #CFD8DC !important;
         margin: 1rem 0 !important;
     }
     
     /* Success/warning boxes in sidebar */
     [data-testid="stSidebar"] .stAlert {
-        background-color: rgba(255, 255, 255, 0.1) !important;
-        border-left-color: #0088CC !important;
+        background-color: #E8F5E9 !important;
+        color: #1B5E20 !important;
+        border-left-color: #4CAF50 !important;
+    }
+    
+    /* Info boxes in sidebar */
+    [data-testid="stSidebar"] [data-baseweb="notification"] {
+        background-color: #E3F2FD !important;
+        color: #0D47A1 !important;
     }
     
     /* ========== GENERAL BUTTONS ========== */
@@ -181,6 +193,20 @@ st.markdown("""
 # ================================================
 # AUTHENTICATION CHECK
 # ================================================
+# DEBUG: Show auth/database status (TEMPORARY - remove after debugging)
+if not st.session_state.get('debug_shown', False):
+    with st.sidebar:
+        st.markdown("---")
+        st.caption("🔧 **Debug Info:**")
+        st.caption(f"Auth Available: {AUTH_AVAILABLE}")
+        st.caption(f"Database Enabled: {database_enabled}")
+        if not AUTH_AVAILABLE:
+            st.warning("⚠️ Auth disabled - running in standalone mode")
+            if not database_enabled:
+                st.caption("Reason: Database not connected")
+        st.markdown("---")
+    st.session_state.debug_shown = True
+
 # Check authentication before allowing access
 if AUTH_AVAILABLE:
     try:
@@ -1947,8 +1973,11 @@ elif page == "Library Search" and database_enabled and LIBRARY_PAGES_AVAILABLE:
             cols = st.columns(4)
             for i, (elem, val) in enumerate(spectrum.items()):
                 with cols[i % 4]:
-                    if val and val > 0:
-                        st.metric(elem.upper(), f"{val:.2f}%")
+                    try:
+                        if val is not None and float(val) > 0:
+                            st.metric(elem.upper(), f"{float(val):.2f}%")
+                    except (ValueError, TypeError):
+                        pass  # Skip non-numeric values
         
         st.markdown("---")
         
@@ -2018,8 +2047,11 @@ elif page == "Add to Library" and database_enabled and LIBRARY_PAGES_AVAILABLE:
             cols = st.columns(4)
             for i, (elem, val) in enumerate(spectrum.items()):
                 with cols[i % 4]:
-                    if val and val > 0:
-                        st.metric(elem.upper(), f"{val:.2f}%")
+                    try:
+                        if val is not None and float(val) > 0:
+                            st.metric(elem.upper(), f"{float(val):.2f}%")
+                    except (ValueError, TypeError):
+                        pass  # Skip non-numeric values
         
         st.markdown("---")
         st.markdown("### Metadata")
