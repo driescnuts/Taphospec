@@ -77,9 +77,10 @@ try:
 except:
     LOGO_AVAILABLE = False
 
-# Custom CSS
+# Custom CSS - TaphoSpec Sidebar Fix
 st.markdown("""
 <style>
+    /* ========== MAIN CONTENT ========== */
     .main-header {
         font-size: 3rem;
         font-weight: bold;
@@ -93,22 +94,86 @@ st.markdown("""
         text-align: center;
         margin-bottom: 2rem;
     }
-    .stButton>button {
-        width: 100%;
-    }
     
-    /* TaphoSpec Colors */
     h1 {
         color: #1E3A5F;
         border-bottom: 3px solid #0088CC;
+        padding-bottom: 0.5rem;
     }
     
+    /* ========== SIDEBAR STYLING ========== */
     [data-testid="stSidebar"] {
         background: linear-gradient(180deg, #1E3A5F 0%, #2C3E50 100%);
+        padding-top: 1rem;
+    }
+    
+    /* Make ALL sidebar text white and visible */
+    [data-testid="stSidebar"] * {
+        color: #FFFFFF !important;
+    }
+    
+    /* Sidebar buttons */
+    [data-testid="stSidebar"] button {
+        background-color: rgba(255, 255, 255, 0.15) !important;
+        color: #FFFFFF !important;
+        border: 1px solid rgba(255, 255, 255, 0.3) !important;
+        border-radius: 8px !important;
+        padding: 0.5rem 1rem !important;
+        font-weight: 500 !important;
+        transition: all 0.2s ease !important;
+        margin: 0.2rem 0 !important;
     }
     
     [data-testid="stSidebar"] button:hover {
         background-color: #0088CC !important;
+        border-color: #0088CC !important;
+        transform: translateX(3px);
+        box-shadow: 0 2px 8px rgba(0, 136, 204, 0.4);
+    }
+    
+    /* Expander headers */
+    [data-testid="stSidebar"] .streamlit-expanderHeader {
+        background-color: rgba(255, 255, 255, 0.1) !important;
+        border-radius: 6px !important;
+        padding: 0.75rem 1rem !important;
+        margin: 0.5rem 0 !important;
+        font-weight: 600 !important;
+        font-size: 0.95rem !important;
+    }
+    
+    [data-testid="stSidebar"] .streamlit-expanderHeader:hover {
+        background-color: rgba(255, 255, 255, 0.15) !important;
+    }
+    
+    /* Expanded content area */
+    [data-testid="stSidebar"] .streamlit-expanderContent {
+        padding: 0.5rem 0.25rem !important;
+    }
+    
+    /* Captions in sidebar */
+    [data-testid="stSidebar"] .caption {
+        color: rgba(255, 255, 255, 0.7) !important;
+        font-size: 0.85rem !important;
+        margin-bottom: 0.5rem !important;
+        padding-left: 0.5rem;
+    }
+    
+    /* Dividers */
+    [data-testid="stSidebar"] hr {
+        border-color: rgba(255, 255, 255, 0.2) !important;
+        margin: 1rem 0 !important;
+    }
+    
+    /* Success/warning boxes in sidebar */
+    [data-testid="stSidebar"] .stAlert {
+        background-color: rgba(255, 255, 255, 0.1) !important;
+        border-left-color: #0088CC !important;
+    }
+    
+    /* ========== GENERAL BUTTONS ========== */
+    .stButton>button {
+        width: 100%;
+        border-radius: 8px;
     }
 </style>
 """, unsafe_allow_html=True)
