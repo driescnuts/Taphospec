@@ -204,17 +204,27 @@ def init_auth_session_state():
 def render_login_page():
     """Render the login/registration page"""
     
-    st.markdown("""
-        <div style="text-align: center; padding: 2rem 0;">
-            <h1 style="color: #78350f; font-size: 3rem;">🔬 TaphoSpec</h1>
-            <p style="font-size: 1.2rem; color: #64748b;">
-                Archaeological Residue Authentication Platform
-            </p>
-            <p style="color: #94a3b8;">TraceoLab, University of Liège</p>
-        </div>
-    """, unsafe_allow_html=True)
+    # Center the content
+    col1, col2, col3 = st.columns([1, 2, 1])
     
-    # Create tabs for login and registration
+    with col2:
+        # Display logo (centered and responsive)
+        try:
+            st.image("assets/TaphoSpec_logo.png", use_container_width=True)
+            st.markdown("###")  # Spacing after logo
+        except:
+            # Fallback if logo not found
+            st.markdown("""
+                <div style="text-align: center; padding: 2rem 0;">
+                    <h1 style="color: #78350f; font-size: 3rem;">🔬 TaphoSpec</h1>
+                    <p style="font-size: 1.2rem; color: #64748b;">
+                        Archaeological Residue Authentication Platform
+                    </p>
+                    <p style="color: #94a3b8;">TraceoLab, University of Liège</p>
+                </div>
+            """, unsafe_allow_html=True)
+    
+    # Create tabs for login and registration (full width)
     tab1, tab2 = st.tabs(["🔐 Login", "📝 Register"])
     
     # Get auth manager from session state
@@ -225,16 +235,22 @@ def render_login_page():
         return
     
     with tab1:
-        render_login_form(auth)
+        # Center login form
+        col1, col2, col3 = st.columns([1, 2, 1])
+        with col2:
+            render_login_form(auth)
     
     with tab2:
-        render_registration_form(auth)
+        # Center registration form
+        col1, col2, col3 = st.columns([1, 2, 1])
+        with col2:
+            render_registration_form(auth)
     
     st.markdown("---")
     st.markdown("""
         <div style="text-align: center; color: #94a3b8; font-size: 0.9rem;">
             <p>For demo access, contact: traceolab@uliege.be</p>
-            <p>TaphoSpec v2.0 | Secure Multi-User Platform</p>
+            <p>TaphoSpec v2.4 | Context-Aware Analysis Platform</p>
         </div>
     """, unsafe_allow_html=True)
 

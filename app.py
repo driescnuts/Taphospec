@@ -46,21 +46,29 @@ if DATABASE_AVAILABLE:
         database_enabled = False
         print(f"Database connection failed: {e}")
 
-# Initialize authentication
-if AUTH_AVAILABLE:
-    try:
-        init_auth_session_state()
-    except Exception as e:
-        print(f"Auth initialization failed: {e}")
 
-
-# Page configuration
+# Page configuration (MUST BE FIRST STREAMLIT COMMAND!)
 st.set_page_config(
     page_title="TaphoSpec - Archaeological Residue Analysis",
     page_icon="assets/TaphoSpec_logo.png",  # Use your logo as page icon
     layout="wide",
     initial_sidebar_state="expanded"
 )
+
+# Initialize authentication (AFTER page config)
+if AUTH_AVAILABLE and database_enabled:
+    # Only init auth if database is available
+    try:
+        init_auth_session_state()
+    except Exception as e:
+        st.warning(f"⚠️ Authentication initialization failed: {e}")
+        st.info("Running in standalone mode (no authentication)")
+        AUTH_AVAILABLE = False  # Disable auth for this session
+elif AUTH_AVAILABLE and not database_enabled:
+    # Auth needs database
+    st.warning("⚠️ Authentication requires database connection")
+    st.info("Running in standalone mode")
+    AUTH_AVAILABLE = False
 
 # Load and display logo in sidebar
 try:
@@ -102,8 +110,14 @@ st.markdown("""
 # ================================================
 # Check authentication before allowing access
 if AUTH_AVAILABLE:
-    if not check_authentication():
-        st.stop()  # Stop execution if not authenticated
+    try:
+        if not check_authentication():
+            st.stop()  # Stop execution if not authenticated
+    except Exception as e:
+        # Auth system failed - show error but allow standalone mode
+        st.error("⚠️ Authentication system error. Running in standalone mode.")
+        st.caption(f"Error: {str(e)}")
+        # Don't stop - allow app to run without auth
 
 # ================================================
 # CONTEXT-AWARE AUTHENTICATION (v2.4)
