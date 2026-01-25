@@ -714,18 +714,6 @@ with st.sidebar:
             st.session_state.page = "Visual Attributes"
     
     # ================================================
-    # REFERENCE LIBRARY Section
-    # ================================================
-    if database_enabled and LIBRARY_PAGES_AVAILABLE:
-        with st.expander("📚 REFERENCE LIBRARY", expanded=False):
-            if st.button("➕ Manage Entries", use_container_width=True, key="nav_manage"):
-                st.session_state.page = "Library Management"
-            if st.button("🗺️ Reference Origins", use_container_width=True, key="nav_origins"):
-                st.session_state.page = "Reference Origins"
-            if st.button("📊 Library Statistics", use_container_width=True, key="nav_libstats"):
-                st.session_state.page = "Library Statistics"
-    
-    # ================================================
     # SETTINGS Section (Admin only)
     # ================================================
     if AUTH_AVAILABLE and is_admin():
