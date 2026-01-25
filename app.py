@@ -57,10 +57,17 @@ if AUTH_AVAILABLE:
 # Page configuration
 st.set_page_config(
     page_title="TaphoSpec - Archaeological Residue Analysis",
-    page_icon="🔬",
+    page_icon="assets/TaphoSpec_logo.png",  # Use your logo as page icon
     layout="wide",
     initial_sidebar_state="expanded"
 )
+
+# Load and display logo in sidebar
+try:
+    logo = open("assets/TaphoSpec_logo.png", "rb").read()
+    LOGO_AVAILABLE = True
+except:
+    LOGO_AVAILABLE = False
 
 # Custom CSS
 st.markdown("""
@@ -89,6 +96,14 @@ st.markdown("""
     }
 </style>
 """, unsafe_allow_html=True)
+
+# ================================================
+# AUTHENTICATION CHECK
+# ================================================
+# Check authentication before allowing access
+if AUTH_AVAILABLE:
+    if not check_authentication():
+        st.stop()  # Stop execution if not authenticated
 
 # ================================================
 # CONTEXT-AWARE AUTHENTICATION (v2.4)
@@ -379,6 +394,42 @@ def authenticate_standard(data):
     
     return results
 
+# ================================================
+# HELPER FUNCTIONS
+# ================================================
+
+def get_classification_column(df):
+    """Get the correct classification column name (v2.4 compatibility)"""
+    if 'context_adjusted_classification' in df.columns:
+        return 'context_adjusted_classification'
+    elif 'classification' in df.columns:
+        return 'classification'
+    else:
+        return None
+
+def get_classifications(auth_df, pattern, regex=False):
+    """Get count of classifications matching pattern"""
+    class_col = get_classification_column(auth_df)
+    if class_col is None:
+        return 0
+    return sum(auth_df[class_col].str.contains(pattern, na=False, regex=regex))
+
+def calculate_correlations(df):
+    """Calculate elemental correlations"""
+    # Elements to correlate (exclude O which is calculated)
+    elements = ['c', 'p', 'ca', 'si', 'al', 'fe', 'k', 'mg', 'na', 's', 'mn']
+    
+    # Get available elements in dataframe
+    available_elements = [e for e in elements if e in df.columns]
+    
+    if len(available_elements) < 2:
+        return None
+    
+    # Calculate correlation matrix
+    corr_matrix = df[available_elements].corr()
+    
+    return corr_matrix
+
 
 
 # ================================================
@@ -561,7 +612,11 @@ if 'page' not in st.session_state:
     st.session_state.page = "Home"
 
 with st.sidebar:
-    st.header("🔬 TaphoSpec v2.3")
+    # Display logo if available
+    if LOGO_AVAILABLE:
+        st.image("assets/TaphoSpec_logo.png", use_container_width=True)
+    else:
+        st.header("🔬 TaphoSpec v2.4")
     
     # Quick Access Buttons
     col1, col2 = st.columns(2)
@@ -649,7 +704,7 @@ with st.sidebar:
     st.markdown("---")
     
     # Version info
-    st.caption("TaphoSpec v2.3 - Clean Structure")
+    st.caption("TaphoSpec v2.4 - Context-Aware")
     st.caption("TraceoLab - ULiège")
 
 if 'data' not in st.session_state:
@@ -763,13 +818,13 @@ elif page == "Data Import":
                 else:
                     st.session_state.data = df
                     
-                    # Authenticate all points
-                    auth_results = []
-                    for idx, row in df.iterrows():
-                        auth = authenticate_residue(row)
-                        auth_results.append(auth)
-                    
-                    st.session_state.authenticated_data = pd.DataFrame(auth_results)
+                    # Auto-authenticate on import using standard criteria
+                    try:
+                        auth_result = authenticate_standard(df)
+                        st.session_state.authenticated_data = auth_result
+                    except Exception as e:
+                        st.warning(f"Could not auto-authenticate: {str(e)}")
+                        st.session_state.authenticated_data = None
                     
                     st.success(f"✅ Successfully loaded {len(df)} analysis points!")
                     
@@ -918,139 +973,149 @@ elif page == "Correlation Analysis":
 
 # Page: Authentication
 elif page == "Authentication":
+    st.header("🎯 Bulk Authentication")
+    st.markdown("### Context-Aware Residue Authentication")
+    
+    # Get site context
+    site_context = None
+    if database_enabled and st.session_state.get('current_site_id'):
+        try:
+            sites = db.get_sites()
+            site_context = next((s for s in sites if s['site_id'] == st.session_state.current_site_id), None)
+            
+            if site_context and site_context.get('context_type'):
+                st.success(f"✅ Site: {site_context['site_name']}")
+                
+                ctx_label = {
+                    'cave_guano': '🦇 Cave (Guano-Rich)',
+                    'cave_carbonate': '🪨 Cave (Carbonate)',
+                    'open_air_sand': '🏖️ Open-Air (Sand)',
+                    'open_air_clay': '🧱 Open-Air (Clay)',
+                    'rockshelter': '🏔️ Rockshelter',
+                    'peat_bog': '🌿 Peat Bog'
+                }.get(site_context['context_type'], site_context['context_type'])
+                
+                st.info(f"**Context:** {ctx_label} - Context-specific criteria will be applied!")
+        except Exception as e:
+            st.warning(f"Could not load site context: {str(e)}")
+    
     if st.session_state.data is None:
-        st.warning("⚠️ Please upload data first in the Data Import section.")
+        st.warning("📁 No data loaded. Please import data first.")
+        if st.button("→ Go to Data Import"):
+            st.session_state.page = "Data Import"
+            st.rerun()
     else:
-        st.header("🔍 Residue Authentication")
+        st.success(f"📊 Loaded: {len(st.session_state.data)} analyses")
         
-        df = st.session_state.data
-        auth_df = st.session_state.authenticated_data
+        # Show data preview
+        with st.expander("📋 Data Preview"):
+            st.dataframe(st.session_state.data.head())
         
-        # Summary metrics
-        col1, col2, col3, col4 = st.columns(4)
+        st.markdown("---")
+        
+        # Authentication button
+        col1, col2 = st.columns([3, 1])
         
         with col1:
-            st.metric("Total Points", len(df))
+            if site_context and site_context.get('context_type'):
+                st.markdown("**Context-Aware Authentication**")
+                st.caption(f"Using {site_context['context_type']} specific criteria")
+            else:
+                st.markdown("**Standard Authentication**")
+                st.caption("Using Karkanas & Weiner (2010) standard criteria")
         
         with col2:
-            organic_count = sum(auth_df['classification'].str.contains('Organic', na=False))
-            st.metric("Organic Residues", organic_count, delta=None, delta_color="normal")
+            run_auth = st.button("🎯 Run Authentication", type="primary", use_container_width=True)
         
-        with col3:
-            mineral_count = sum(
-                auth_df['classification'].str.contains('Mineral|Phosphate', na=False, regex=True)
-            )
-            st.metric("Mineral Mimics", mineral_count, delta=None, delta_color="inverse")
+        if run_auth:
+            with st.spinner("Running authentication..."):
+                try:
+                    # Context-aware authentication
+                    if site_context and site_context.get('context_type'):
+                        auth_result = authenticate_with_context(st.session_state.data, site_context)
+                        
+                        results = auth_result['results']
+                        methodology = auth_result['methodology']
+                        references = auth_result['references']
+                        interpretation = auth_result['interpretation']
+                        
+                        st.session_state.authenticated_data = results
+                        st.success(f"✅ Authentication complete!")
+                        
+                        # Show methodology
+                        with st.expander("📚 Methodology & References", expanded=True):
+                            st.markdown(f"**Method:** {methodology}")
+                            st.markdown("---")
+                            st.markdown("**Interpretation:**")
+                            st.info(interpretation)
+                            st.markdown("---")
+                            st.markdown("**Key Publications:**")
+                            for ref in references:
+                                st.caption(f"- {ref}")
+                    else:
+                        # Standard authentication
+                        results = authenticate_standard(st.session_state.data)
+                        st.session_state.authenticated_data = results
+                        st.success("✅ Standard authentication complete")
+                
+                except Exception as e:
+                    st.error(f"Authentication error: {str(e)}")
+                    st.exception(e)
         
-        with col4:
-            ca_p_ratios = [r for r in auth_df['ca_p_ratio'] if r is not None]
-            avg_ratio = np.mean(ca_p_ratios) if ca_p_ratios else None
-            st.metric("Avg Ca/P Ratio", f"{avg_ratio:.2f}" if avg_ratio else "N/A")
-        
-        # Ca/P Ratio interpretation
-        if avg_ratio and 1.5 <= avg_ratio <= 1.8:
-            st.markdown(f"""
-            <div class="warning-box">
-            <strong>Ca/P Ratio Interpretation:</strong> Average ratio {avg_ratio:.2f} is consistent with 
-            hydroxyapatite/dahllite - indicates biogenic phosphate from vertebrate-derived material (guano)
-            </div>
-            """, unsafe_allow_html=True)
-        
-        st.markdown("---")
-        
-        # Classification breakdown
-        st.markdown("## 📊 Classification Breakdown")
-        
-        classification_counts = auth_df['classification'].value_counts()
-        
-        fig = px.bar(
-            x=classification_counts.values,
-            y=classification_counts.index,
-            orientation='h',
-            color=classification_counts.index,
-            color_discrete_map={
-                'Organic Adhesive': '#10b981',
-                'Ochre-Loaded Compound Adhesive': '#059669',
-                'Mn-Phosphate Mineral Mimic': '#ef4444',
-                'Apatite (Biogenic)': '#f97316',
-                'K-Al Phosphate (Acidic Diagenesis)': '#f59e0b',
-                'Partially Mineralized Organic': '#eab308',
-                'Possible Organic Material': '#84cc16',
-                'Ambiguous': '#94a3b8'
-            }
-        )
-        
-        fig.update_layout(
-            showlegend=False,
-            xaxis_title="Count",
-            yaxis_title="",
-            height=300,
-            margin=dict(l=10, r=10, t=10, b=10)
-        )
-        
-        st.plotly_chart(fig, use_container_width=True)
-        
-        st.markdown("---")
-        
-        # Data table with authentication results
-        st.markdown("## 📋 Detailed Results")
-        
-        # Combine data
-        display_df = df.copy()
-        display_df['Classification'] = auth_df['classification']
-        display_df['Confidence'] = auth_df['confidence']
-        display_df['Ca/P'] = auth_df['ca_p_ratio'].apply(lambda x: f"{x:.2f}" if x else "N/A")
-        
-        # Add color coding
-        def color_classification(val):
-            colors = {
-                'Organic Adhesive': 'background-color: #d1fae5',
-                'Ochre-Loaded Compound Adhesive': 'background-color: #d1fae5',
-                'Mn-Phosphate Mineral Mimic': 'background-color: #fee2e2',
-                'Apatite (Biogenic)': 'background-color: #fed7aa',
-                'K-Al Phosphate (Acidic Diagenesis)': 'background-color: #fef3c7',
-                'Partially Mineralized Organic': 'background-color: #fef9c3',
-                'Possible Organic Material': 'background-color: #ecfccb',
-                'Ambiguous': 'background-color: #f1f5f9'
-            }
-            return colors.get(val, '')
-        
-        styled_df = display_df.style.applymap(
-            color_classification,
-            subset=['Classification']
-        )
-        
-        st.dataframe(styled_df, use_container_width=True)
-        
-        # Download results
-        st.markdown("---")
-        st.markdown("## 💾 Export Results")
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            csv = display_df.to_csv(index=False)
+        # Show results if available
+        if st.session_state.authenticated_data is not None:
+            st.markdown("---")
+            st.markdown("### 📊 Results")
+            
+            results = st.session_state.authenticated_data
+            
+            # Summary statistics
+            col1, col2, col3, col4 = st.columns(4)
+            
+            with col1:
+                organic_count = get_classifications(results, 'Organic')
+                st.metric("Organic", organic_count)
+            
+            with col2:
+                apatite_count = get_classifications(results, 'Apatite')
+                st.metric("Apatite", apatite_count)
+            
+            with col3:
+                mimic_count = get_classifications(results, 'Mimic')
+                st.metric("Mimic", mimic_count)
+            
+            with col4:
+                if 'confidence_level' in results.columns:
+                    high_conf = len(results[results['confidence_level'] == 'High'])
+                    st.metric("High Confidence", high_conf)
+            
+            # Results table
+            st.markdown("### Detailed Results")
+            
+            # Select columns to display
+            display_cols = ['c', 'p', 'ca']
+            class_col = get_classification_column(results)
+            if class_col:
+                display_cols.append(class_col)
+            if 'confidence_level' in results.columns:
+                display_cols.append('confidence_level')
+            
+            # Filter to existing columns
+            display_cols = [col for col in display_cols if col in results.columns]
+            
+            st.dataframe(results[display_cols], use_container_width=True, height=400)
+            
+            # Export option
+            st.markdown("---")
+            csv = results.to_csv(index=False)
             st.download_button(
-                label="📥 Download as CSV",
+                label="📥 Download Results (CSV)",
                 data=csv,
-                file_name="taphospec_authentication_results.csv",
+                file_name="authentication_results.csv",
                 mime="text/csv"
             )
-        
-        with col2:
-            # Excel export
-            buffer = BytesIO()
-            with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
-                display_df.to_excel(writer, sheet_name='Authentication', index=False)
-            
-            st.download_button(
-                label="📥 Download as Excel",
-                data=buffer.getvalue(),
-                file_name="taphospec_authentication_results.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            )
 
-# Page: Visual Attributes
+
 elif page == "Visual Attributes":
     if st.session_state.data is None:
         st.warning("⚠️ Please upload data first in the Data Import section.")
@@ -1098,10 +1163,13 @@ elif page == "Visual Attributes":
         df = st.session_state.data
         auth_df = st.session_state.authenticated_data
         
+        # Determine classification column (v2.4 uses context_adjusted_classification)
+        class_col = 'context_adjusted_classification' if 'context_adjusted_classification' in auth_df.columns else 'classification'
+        
         point_id = st.selectbox(
             "Select analysis point to document:",
             options=range(1, len(df) + 1),
-            format_func=lambda x: f"Point {x} - {auth_df.iloc[x-1]['classification']}"
+            format_func=lambda x: f"Point {x} - {auth_df.iloc[x-1][class_col]}" if class_col in auth_df.columns else f"Point {x}"
         )
         
         point_idx = point_id - 1
